@@ -181,6 +181,14 @@ class Meaning(dict):
     m.print(m.indent + 'Interpreting', alpha)
     m.indent += m.indent_chars
 
+    value, rule = self.rules(alpha)
+
+    m.indent = m.indent[:-len(m.indent_chars)]
+    m.print(m.indent + '=>', alpha, '=', value, f'\t({rule})')
+    return value
+
+  def rules(self, alpha):
+    m = self
     match alpha:      # Note: m.quiet(  ) turns off printing
       # FA
       case (beta, gamma) if m.quiet(  m[gamma] in m[beta].domain()  ):
@@ -204,9 +212,7 @@ class Meaning(dict):
         rule = '??'
         value = alpha
 
-    m.indent = m.indent[:-len(m.indent_chars)]
-    m.print(m.indent + '=>', alpha, '=', value, f'\t({rule})')
-    return value
+    return value, rule
 
   # This (somewhat evil) code handles the m.quiet( ) functionality
   def __getattr__(self, s):
