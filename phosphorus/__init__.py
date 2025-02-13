@@ -181,13 +181,16 @@ class Meaning(dict):
     m.print('Interpreting', alpha)
     m.indent += m.indent_chars
 
-    if isinstance(alpha, tuple):
-      vacuous = [x for x in alpha if isinstance(x, str) and m.lookup(x) is None]
+    if isinstance(alpha, (tuple, list)):
+      vacuous = [x for x in alpha if m.quiet(m[x]) is None]
       if vacuous:
         m.print('Removing vacuous items:', vacuous)
         alpha = tuple(x for x in alpha if x not in vacuous)
-
-    value, rule = self.rules(alpha)
+    
+    if not alpha:
+      value, rule = None, 'NN'
+    else:
+      value, rule = self.rules(alpha)
 
     m.indent = m.indent[:-len(m.indent_chars)]
     m.print('=>', alpha, '=', value, f'\t({rule})')
@@ -210,7 +213,7 @@ class Meaning(dict):
         value = m[beta]
 
       # TN
-      case str() if alpha in m:
+      case str():
         rule = 'TN'
         value = m.lookup(alpha)
 
