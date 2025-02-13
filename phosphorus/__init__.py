@@ -1,3 +1,5 @@
+# pylint: disable=missing-class-docstring,missing-function-docstring, invalid-name
+
 from IPython import get_ipython
 
 # This class converts expressions of the form '...'.type into
@@ -7,13 +9,13 @@ class ExprTransformer(NodeTransformer):
   def visit_Attribute(self, node):
     self.generic_visit(node)
     match node:
-      case Attribute(value=Constant() as expr,
-                     attr=stype) if not hasattr(str, stype):
-        node.value = Name(id='Type', ctx=Load())
+      case Attribute(value=Constant() as semval,
+                    attr=stype) if not hasattr(str, stype):
+          node.value = Name(id='Type', ctx=Load())
       case _: return node
     out = Call(func=Attribute(value=Name(id='SemVal', ctx=Load()),
                               attr='create', ctx=Load()),
-                args=[expr, node], keywords=[])
+                args=[semval, node], keywords=[])
     #print(dump(out))
     return out
 
@@ -26,23 +28,22 @@ ip_asts.append(ExprTransformer())
 # values provided by a context.
 
 class VariableReplacer(NodeTransformer):
-  def __init__(self, context):
-    self.context = context
+  def __init__(self, context): self.context = context
 
   def visit_Lambda(self, node):
-      args = {arg.arg for arg in node.args.args}
-      shadowed = {v:self.context.pop(v) for v in args if v in self.context}
-      new_node = self.generic_visit(node)
-      self.context.update(shadowed)
-      return new_node
+    args = {arg.arg for arg in node.args.args}
+    shadowed = {v:self.context.pop(v) for v in args if v in self.context}
+    new_node = self.generic_visit(node)
+    self.context.update(shadowed)
+    return new_node
 
   def visit_Name(self, node):
-      if node.id in self.context:
-        #print(f'Replacing {node.id} with {self.context[node.id]}, {type(self.context[node.id])}')
-        if hasattr(self.context[node.id], 'to_ast'):
-          return self.context[node.id].to_ast()
-        return Constant(value=str(self.context[node.id]))
-      return node
+    if node.id in self.context:
+      #print(f'Replacing {node.id} with {self.context[node.id]}, {type(self.context[node.id])}')
+      if hasattr(self.context[node.id], 'to_ast'):
+        return self.context[node.id].to_ast()
+      return Constant(value=str(self.context[node.id]))
+    return node
   
 # This is a bit of somewhat evil magic python code. It handles the
 # Type.<type> expressions
@@ -147,7 +148,8 @@ class Meaning(dict):
   def lookup(self, word):   return super().__getitem__(word)
 
   # Main interpretation function
-  def interpret(m, alpha):
+  def interpret(self, alpha):
+    m = self
     if not m.indent: m.print() # Skip a line before the first output
     m.print(m.indent + 'Interpreting', alpha)
     m.indent += m.indent_chars
