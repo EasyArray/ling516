@@ -166,25 +166,31 @@ class Function(SemVal):
 
 class Meaning(dict):
   indent = ''; indent_chars = '   '
-  print = print
+  print = lambda self, *args, **kws: print(self.indent, *args, **kws)
 
   # Defines the behavior of m[]
   def __getitem__(self, k): return self.interpret(k)
 
   # Just look up a word in the lexicon
-  def lookup(self, word):   return super().__getitem__(word)
+  def lookup(self, word):   return super().get(word, None)
 
   # Main interpretation function
   def interpret(self, alpha):
     m = self
     if not m.indent: m.print() # Skip a line before the first output
-    m.print(m.indent + 'Interpreting', alpha)
+    m.print('Interpreting', alpha)
     m.indent += m.indent_chars
+
+    if isinstance(alpha, tuple):
+      vacuous = [x for x in alpha if isinstance(x, str) and m.lookup(x) is None]
+      if vacuous:
+        m.print('Removing vacuous items:', vacuous)
+        alpha = tuple(x for x in alpha if x not in vacuous)
 
     value, rule = self.rules(alpha)
 
     m.indent = m.indent[:-len(m.indent_chars)]
-    m.print(m.indent + '=>', alpha, '=', value, f'\t({rule})')
+    m.print('=>', alpha, '=', value, f'\t({rule})')
     return value
 
   def rules(self, alpha):
