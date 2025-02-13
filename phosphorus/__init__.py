@@ -32,18 +32,20 @@ class VariableReplacer(NodeTransformer):
     self.context = context
 
   def visit_Call(self, node):
-    if isinstance(node.func, Lambda):
-      vars = {arg.arg for arg in node.func.args.args}
+    func = self.visit(node.func)
+    if isinstance(func, Lambda):
+      vars = {arg.arg for arg in func.args.args}
       for arg in node.args:
         self.visit(arg)
       context = self.context | dict(zip(vars, node.args))
       #print('new context', context)
-      return VariableReplacer(context).visit(node.func.body)
+      return VariableReplacer(context).visit(func.body)
     
     self.generic_visit(node)
     return node
   
   def visit_Lambda(self, node):
+    # TODO: add capture avoidance
     args = {arg.arg for arg in node.args.args}
     shadowed = {v:self.context.pop(v) for v in args if v in self.context}
     new_node = self.generic_visit(node)
@@ -90,6 +92,10 @@ class SemVal():
 
   @classmethod
   def create(cls, s, stype):
+    node = parse(s, mode='eval').body
+    if isinstance(node, Call):
+      node = VariableReplacer({}).visit(node)
+      s = unparse(node)
     if stype.isfunction():
       try:    return Function(s, stype)
       except: pass
@@ -152,6 +158,9 @@ class Function(SemVal):
     value = dumps(f'lambda {vars}: {self.value}')
     out = f'Function({value}, Type({self.type}))'
     return out
+  
+  def to_ast(self):
+    return parse(f'lambda {",".join(self.vars)}: {self.value}', mode='eval').body
 
 class Meaning(dict):
   indent = ''; indent_chars = '   '
