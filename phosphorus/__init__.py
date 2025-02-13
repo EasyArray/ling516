@@ -103,7 +103,7 @@ class SemVal():
 
   def _repr_html_(self):
     return f"""{self}
-        <span style='float:right; font-family:monospace;
+        <span style='float:right; font-family:monospace; margin-right:75px;
               font-weight:bold; background-color:#e5e5ff'>
           {self.type}</span>"""
 
@@ -113,6 +113,8 @@ class SemVal():
 
 class Function(SemVal):
   def __init__(self, s, stype):
+    if not stype.isfunction():
+      raise ValueError(f'Invalid type for "{s}": {stype}')
     self.type = stype
     node = parse(s, mode='eval').body
     match node:
