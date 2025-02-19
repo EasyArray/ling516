@@ -165,7 +165,8 @@ class Function(SemVal):
     return parse(f'lambda {",".join(self.vars)}: {self.value}', mode='eval').body
 
 class Meaning(dict):
-  indent = ''; indent_chars = '   '
+  indent = ''
+  indent_chars = '   '
   print = lambda self, *args, **kws: print(self.indent, *args, **kws)
 
   # Defines the behavior of m[]
@@ -176,25 +177,30 @@ class Meaning(dict):
 
   # Main interpretation function
   def interpret(self, alpha):
-    m = self
-    if not m.indent: m.print() # Skip a line before the first output
-    m.print('Interpreting', alpha)
-    m.indent += m.indent_chars
+    try:
+      m = self
+      if not m.indent: m.print() # Skip a line before the first output
+      m.print('Interpreting', alpha)
+      m.indent += m.indent_chars
 
-    if isinstance(alpha, (tuple, list)):
-      vacuous = [x for x in alpha if m.quiet(m[x]) is None]
-      if vacuous:
-        m.print('Removing vacuous items:', vacuous)
-        alpha = tuple(x for x in alpha if x not in vacuous)
-    
-    if not alpha:
-      value, rule = None, 'NN'
-    else:
-      value, rule = self.rules(alpha)
+      if isinstance(alpha, (tuple, list)):
+        vacuous = [x for x in alpha if m.quiet(m[x]) is None]
+        if vacuous:
+          m.print('Removing vacuous items:', vacuous)
+          alpha = tuple(x for x in alpha if x not in vacuous)
+      
+      if not alpha:
+        value, rule = None, 'NN'
+      else:
+        value, rule = self.rules(alpha)
 
-    m.indent = m.indent[:-len(m.indent_chars)]
-    m.print('=>', alpha, '=', value, f'\t({rule})')
-    return value
+      m.indent = m.indent[:-len(m.indent_chars)]
+      m.print('=>', alpha, '=', value, f'\t({rule})')
+      return value
+    except Exception as e:
+      self.indent = ''
+      self.print = lambda self, *args, **kws: print(self.indent, *args, **kws)
+      raise e
 
   def rules(self, alpha):
     m = self
