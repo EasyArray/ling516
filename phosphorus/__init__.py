@@ -104,7 +104,7 @@ class SemVal():
   def _repr_html_(self):
     return f"""{self}
         <span style='float:right; font-family:monospace; margin-right:75px;
-              font-weight:bold; background-color:#e5e5ff'>
+              font-weight:bold; background-color:#e5e5ff; color:#000'>
           {self.type}</span>"""
 
   def __repr__(self): return str(self.value)
