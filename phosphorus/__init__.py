@@ -167,7 +167,9 @@ class Function(SemVal):
 class Meaning(dict):
   indent = ''
   indent_chars = '   '
-  print = lambda self, *args, **kws: print(self.indent, *args, **kws)
+  def indent_print(self, *args, **kws):
+    print(self.indent, *args, **kws)
+  print = indent_print
 
   # Defines the behavior of m[]
   def __getitem__(self, k): return self.interpret(k)
@@ -199,7 +201,7 @@ class Meaning(dict):
       return value
     except Exception as e:
       self.indent = ''
-      self.print = lambda self, *args, **kws: print(self.indent, *args, **kws)
+      self.print = self.indent_print
       raise e
 
   def rules(self, alpha):
