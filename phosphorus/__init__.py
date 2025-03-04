@@ -1,4 +1,4 @@
-# pylint: disable=missing-class-docstring,missing-function-docstring, invalid-name
+# pylint: disable=missing-class-docstring,missing-function-docstring,missing-module-docstring,invalid-name
 
 from IPython import get_ipython
 
@@ -11,7 +11,7 @@ class ExprTransformer(NodeTransformer):
     match node:
       case Attribute(value=Constant() as semval,
                     attr=stype) if not hasattr(str, stype):
-          node.value = Name(id='Type', ctx=Load())
+        node.value = Name(id='Type', ctx=Load())
       case _: return node
     out = Call(func=Attribute(value=Name(id='SemVal', ctx=Load()),
                               attr='create', ctx=Load()),
@@ -21,12 +21,11 @@ class ExprTransformer(NodeTransformer):
 
 ip_asts = get_ipython().ast_transformers
 while(ip_asts and type(ip_asts[-1]).__name__ == "ExprTransformer"):
-    del ip_asts[-1]
+  del ip_asts[-1]
 ip_asts.append(ExprTransformer())
 
 # This class replaces variables in python code with
 # values provided by a context.
-
 class VariableReplacer(NodeTransformer):
   def __init__(self, context): 
     self.context = context
@@ -84,7 +83,7 @@ class Type(tuple,metaclass=TypeMeta):
   def __repr__(self):
     if len(self) == 1:  return repr(self[0])
     return super().__repr__()
-  
+
 class SemVal():
   def __init__(self, s, stype):
     self.value = s
@@ -164,12 +163,47 @@ class Function(SemVal):
   def to_ast(self):
     return parse(f'lambda {",".join(self.vars)}: {self.value}', mode='eval').body
 
+import logging
+# ANSI escape codes for colors
+COLORS = {
+    "DEBUG": "\033[90m",  # Gray
+    "INFO": "",            # Default color
+    "WARNING": "\033[93m",  # Yellow
+    "ERROR": "\033[91m",   # Red
+    "CRITICAL": "\033[41m\033[97m",  # White on Red Background
+    "RESET": "\033[0m"    # Reset color
+}
+
+class ColorFormatter(logging.Formatter):
+  """Custom formatter to add color based on log level."""
+  def format(self, record):
+    log_color = COLORS.get(record.levelname, COLORS["RESET"])
+    message = super().format(record)
+    return f"{log_color}{message}{COLORS['RESET']}"  # Wrap message in color codes
+
+from logging.handlers import MemoryHandler
+
+# Create a stream handler (prints logs to console)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO) 
+console_handler.setFormatter(ColorFormatter("%(message)s"))
+
+# Create a memory handler to buffer logs below WARNING level
+memory_handler = MemoryHandler(capacity=1000, target=console_handler, flushLevel=logging.CRITICAL)
+
+# Set up root logger
+logger = logging.getLogger("BufferedLogger")
+logger.setLevel(logging.DEBUG)  # Capture all logs internally
+logger.addHandler(memory_handler)
+logger.addHandler(console_handler)
+
+
 class Meaning(dict):
   indent = ''
   indent_chars = '   '
-  def indent_print(self, *args, **kws):
-    print(self.indent, *args, **kws)
-  print = indent_print
+  def print(self, *args, level=logging.INFO):
+    msg = self.indent + ' '.join(map(str, args))
+    logger.log(level, msg)
 
   # Defines the behavior of m[]
   def __getitem__(self, k): return self.interpret(k)
@@ -181,32 +215,55 @@ class Meaning(dict):
   def interpret(self, alpha):
     try:
       m = self
-      if not m.indent: m.print() # Skip a line before the first output
+      if not m.indent: 
+        m.print() # Skip a line before the first output
+        self.prev_logger_level = console_handler.level
+        memory_handler.buffer.clear()
+        memory_handler.setLevel(logging.DEBUG)
       m.print('Interpreting', alpha)
       m.indent += m.indent_chars
 
-      if isinstance(alpha, (tuple, list)):
+      if isinstance(alpha, tuple):
+        alpha = list(alpha)
+      if isinstance(alpha, list):
+        if len(alpha) == 0:
+          raise ValueError(f'Node {alpha} has no children')
         vacuous = [x for x in alpha if m.quiet(m[x]) is None]
         if vacuous:
-          m.print('Removing vacuous items:', vacuous)
-          alpha = tuple(x for x in alpha if x not in vacuous)
+          m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
+          alpha[:] = (x for x in alpha if x not in vacuous)
       
       if not alpha:
+        m.print('No non-vacuous children in node', alpha, level=logging.WARNING)
         value, rule = None, 'NN'
       else:
         value, rule = self.rules(alpha)
+        if value is rule is None:
+          children = ' and '.join(map(str, alpha))
+          raise ValueError(f'No rule found to combine {children}')
 
       m.indent = m.indent[:-len(m.indent_chars)]
       m.print('=>', alpha, '=', value, f'\t({rule})')
       return value
     except Exception as e:
       self.indent = ''
-      self.print = self.indent_print
+      console_handler.setLevel(self.prev_logger_level)
+      memory_handler.setLevel(logging.CRITICAL)
+      m.print(f'!!! Error interpreting node {alpha}: {e}', level=logging.ERROR)
+      if len(memory_handler.buffer) > 0:
+        m.print('Previously silenced output:', level=logging.ERROR)
+        memory_handler.flush()
       raise e
 
-  def rules(self, alpha):
-    m = self
+  def rules(m, alpha): # pylint: disable=no-self-argument
+    value, rule = None, None
     match alpha:      # Note: m.quiet(  ) turns off printing
+      # PM
+      case (beta, gamma) if m.quiet(  m[gamma].type == m[beta].type == Type.et ):
+        rule = 'PM'
+        pm_f = Function('lambda f : lambda g: lambda x: f(x) and g(x)', Type.et_et_et)
+        value = pm_f(m[beta])(m[gamma])
+
       # FA
       case (beta, gamma) if m.quiet(  m[gamma] in m[beta].domain()  ):
         rule = 'FA'
@@ -225,19 +282,15 @@ class Meaning(dict):
         rule = 'TN'
         value = m.lookup(alpha)
 
-      case _:
-        rule = '??'
-        value = alpha
-
     return value, rule
 
   # This (somewhat evil) code handles the m.quiet( ) functionality
   def __getattr__(self, s):
     if 'quiet'.startswith(s):
-      prev = self.print
-      self.print = lambda *args, **kws: None
+      prev = console_handler.level
+      console_handler.setLevel(logging.WARNING)
       def run(condition):
-        self.print = prev
+        console_handler.setLevel(prev)
         return condition
     else:
       def run(condition):
