@@ -133,7 +133,11 @@ class Function(SemVal):
 
     out_type = self.type.output()
     if isinstance(node, Lambda):
-      return Function(unparse(node), out_type)
+      try:
+        return Function(unparse(node), out_type)
+      except ValueError as e:
+        logger.error(f'Error in function [λ{self.vars} . {self.value}] (type {self.type}): {e}')
+        raise e
 
     try:
       exprnode = Expression(body=node)
@@ -141,8 +145,11 @@ class Function(SemVal):
       value = eval(code)
       return value
     except Exception as e:
-      #print('Error evaluating ',dump(exprnode), e)
+      logger.debug(f'Error evaluating {dump(exprnode)}: {e}')
       value = unparse(node)
+      if out_type.isfunction():
+        raise ValueError(f'Output of function [λ{self.vars} . {self.value}] (type {self.type})\n'
+                         f'\tis not type {out_type}: {value}')
 
     return SemVal.create(value, out_type)
 
@@ -190,11 +197,11 @@ console_handler.setFormatter(ColorFormatter("%(message)s"))
 
 # Create a memory handler to buffer logs below WARNING level
 memory_handler = MemoryHandler(capacity=1000, target=console_handler, flushLevel=logging.CRITICAL)
+memory_handler.setLevel(logging.INFO)
 
 # Set up root logger
 logger = logging.getLogger("BufferedLogger")
 logger.setLevel(logging.DEBUG)  # Capture all logs internally
-logger.addHandler(memory_handler)
 logger.addHandler(console_handler)
 
 
@@ -219,7 +226,6 @@ class Meaning(dict):
         m.print() # Skip a line before the first output
         self.prev_logger_level = console_handler.level
         memory_handler.buffer.clear()
-        memory_handler.setLevel(logging.DEBUG)
       m.print('Interpreting', alpha)
       m.indent += m.indent_chars
 
@@ -249,7 +255,7 @@ class Meaning(dict):
       self.indent = ''
       console_handler.setLevel(self.prev_logger_level)
       memory_handler.setLevel(logging.CRITICAL)
-      m.print(f'!!! Error interpreting node {alpha}: {e}', level=logging.ERROR)
+      m.print(f'!!! Error interpreting node {alpha}:\n {e}', level=logging.ERROR)
       if len(memory_handler.buffer) > 0:
         m.print('Previously silenced output:', level=logging.ERROR)
         memory_handler.flush()
@@ -289,8 +295,12 @@ class Meaning(dict):
     if 'quiet'.startswith(s):
       prev = console_handler.level
       console_handler.setLevel(logging.WARNING)
+      if memory_handler not in logger.handlers:
+        logger.addHandler(memory_handler)
       def run(condition):
         console_handler.setLevel(prev)
+        if memory_handler in logger.handlers:
+          logger.removeHandler(memory_handler)
         return condition
     else:
       def run(condition):
