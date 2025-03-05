@@ -114,6 +114,7 @@ class Function(SemVal):
     super().__init__(value, stype)
 
   def __call__(self, *args):
+    #logger.warning(f'Calling {repr(self)} with {args}')
     # NOTE TO SELF: some logic is replicated in VariableReplacer
     node = parse(self.value, mode='eval').body
     context = dict(zip(self.vars, args))
@@ -132,7 +133,7 @@ class Function(SemVal):
       exprnode = Expression(body=node)
       fix_missing_locations(exprnode)
       code = compile(exprnode, '<string>', 'eval')
-      value = eval(code, get_ipython().user_ns) # pylint: disable=eval-used
+      value = eval(code, get_ipython().user_ns, context) # pylint: disable=eval-used
       return value
     except Exception as e:
       logger.debug(f'Error evaluating {unparse(node)}: {e}')
@@ -158,4 +159,7 @@ class Function(SemVal):
     return out
   
   def to_ast(self):
+    #TODO: fix functions to work with repr() asts
+    # essentially, we need SemVal's to recursively infect higher structures so
+    # SemVal(...) and SemVal(...) returns the correct SemVal instead of just the second
     return parse(f'lambda {",".join(self.vars)}: {self.value}', mode='eval').body

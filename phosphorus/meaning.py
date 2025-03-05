@@ -8,6 +8,9 @@ from .semval import Function, Type
 
 class Meaning(dict):
   """The Meaning class interprets the meaning of a natural language expression."""
+  
+  memo = {}
+  
   indent = ''
   indent_chars = '   '
   def print(self, *args, level=logging.INFO):
@@ -17,6 +20,14 @@ class Meaning(dict):
 
   # This allows us to use m[] for interpretation
   def __getitem__(self, k):
+    if console_handler.level >= logging.WARNING:
+      #logger.warning(f'Using memoization for {k}')
+      orig = k
+      if isinstance(k, list):
+        k = str(k)
+      if k not in self.memo:
+        self.memo[k] = self.interpret(orig)
+      return self.memo[k]
     return self.interpret(k)
 
   # Just look up a word in the lexicon
@@ -32,6 +43,7 @@ class Meaning(dict):
         m.print() # Skip a line before the first output
         self.prev_logger_level = console_handler.level
         memory_handler.buffer.clear()
+        self.memo.clear()
       m.print('Interpreting', alpha)
       m.indent += m.indent_chars
 
@@ -50,7 +62,7 @@ class Meaning(dict):
         value, rule = None, 'NN'
       else:
         value, rule = self.rules(alpha)
-        if value is rule is None:
+        if value is None and rule is not 'TN': #fix
           children = ' and '.join(map(str, alpha))
           raise ValueError(f'No rule found to combine {children}')
 
