@@ -7,7 +7,7 @@ from logging.handlers import MemoryHandler
 COLORS = {
     "DEBUG": "\033[90m",  # Gray
     "INFO": "",            # Default color
-    "WARNING": "\033[93m",  # Yellow
+    "WARNING": "\033[38;5;208m",  # Orange
     "ERROR": "\033[91m",   # Red
     "CRITICAL": "\033[41m\033[97m",  # White on Red Background
     "RESET": "\033[0m"    # Reset color
