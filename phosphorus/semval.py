@@ -52,6 +52,9 @@ class SemVal:
     self.value = s
     self.type = stype
 
+  def __eq__(self, value):
+    return self.value == value
+
   @classmethod
   def create(cls, s, stype):
     """Creates a SemVal from a string and a Type"""
@@ -72,11 +75,11 @@ class SemVal:
 
   def __repr__(self):
     return str(self.value)
-  
+
   def domain(self):
     """Returns the domain of a function, to be overridden by Function"""
     return set() # There's no domain for nonfunctions
-  
+
   def to_ast(self):
     """Returns the AST of the value, for use an IPython AST transformer"""
     return parse(repr(self), mode='eval').body
