@@ -1,6 +1,6 @@
 """Defines Type, SemVal, and Function classes for the Phosphorus Meaning Engine"""
 
-from ast import parse, unparse, fix_missing_locations
+from ast import Constant, IfExp, parse, unparse, fix_missing_locations
 from ast import Lambda, Call, Expression, Tuple, arguments
 from functools import reduce
 from IPython import get_ipython
@@ -90,24 +90,21 @@ class Function(SemVal):
 
     node = parse(s, mode='eval').body
     match node:
+      case Lambda(args=arguments(args=args),
+                  body=(Tuple(elts=(guard, value))
+                        | IfExp(test=guard, body=value, orelse=Constant(value=None)))):
+        self.vars = tuple(arg.arg for arg in args)
+        guard_expr = unparse(guard)
+        value_expr = unparse(value)
+        self.restriction = guard_expr
+        value = f"{value_expr} if {guard_expr} else None"
       case Lambda(args=arguments(args=args), body=body):
         self.vars = tuple(arg.arg for arg in args)
-        # If the lambda body is a tuple, interpret it as (guard, value)
-        if isinstance(body, Tuple):
-          if len(body.elts) != 2:
-            raise ValueError(f'Lambda tuple must have exactly two elements for domain restriction: {s}')
-          guard_expr, value_expr = map(unparse, body.elts)
-          # Save the guard expression as a string.
-          self.restriction = guard_expr
-          # Build the conditional expression string using an f-string.
-          value = f"{value_expr} if {guard_expr} else None"
-        else:
-          self.restriction = None
-          value = unparse(body)      
+        self.restriction = None
+        value = unparse(body)
       case _:
-        msg = f'Invalid lambda expression: {s}'
-        raise ValueError(msg)
-      
+        raise ValueError(f'Invalid lambda expression: {s}')
+  
     super().__init__(value, stype)
 
   def __call__(self, *args):
