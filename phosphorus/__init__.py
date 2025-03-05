@@ -141,11 +141,12 @@ class Function(SemVal):
 
     try:
       exprnode = Expression(body=node)
+      fix_missing_locations(expr)
       code = compile(exprnode, '<string>', 'eval')
-      value = eval(code)
+      value = eval(code, get_ipython().user_ns)
       return value
     except Exception as e:
-      logger.debug(f'Error evaluating {dump(exprnode)}: {e}')
+      logger.debug(f'Error evaluating {unparse(node)}: {e}')
       value = unparse(node)
       if out_type.isfunction():
         raise ValueError(f'Output of function [λ{self.vars} . {self.value}] (type {self.type})\n'
@@ -203,6 +204,7 @@ memory_handler.setLevel(logging.INFO)
 logger = logging.getLogger("BufferedLogger")
 logger.setLevel(logging.DEBUG)  # Capture all logs internally
 logger.addHandler(console_handler)
+logger.propagate = False # Prevent double logging in Colab
 
 
 class Meaning(dict):
