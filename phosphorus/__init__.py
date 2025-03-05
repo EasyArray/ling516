@@ -34,6 +34,12 @@ while(ip_asts and type(ip_asts[-1]).__name__ == "ExprTransformer"):
 ip_asts.append(ExprTransformer())
 
 
+class Predicate(set):
+  """A set of tuples representing a predicate."""
+  def __call__(self, *args):
+    return int(args in self) # converts True/False to 1/0
+
+
 # Splash screen
 print(r"""
              _    _                  _    _
