@@ -54,6 +54,9 @@ class SemVal:
 
   def __eq__(self, value):
     return self.value == value
+  
+  def __hash__(self):
+    return hash(self.value)
 
   @classmethod
   def create(cls, s, stype):

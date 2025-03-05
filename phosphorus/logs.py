@@ -23,7 +23,7 @@ class ColorFormatter(logging.Formatter):
 
 # Create a stream handler (prints logs to console)
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO) 
+console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(ColorFormatter("%(message)s"))
 
 # Create a memory handler to buffer logs below WARNING level
