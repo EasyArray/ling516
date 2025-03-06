@@ -77,7 +77,7 @@ class SemVal:
           {self.type}</span>"""
 
   def __repr__(self):
-    return str(self.value)
+    return repr(self.value)
 
   def domain(self):
     """Returns the domain of a function, to be overridden by Function"""
