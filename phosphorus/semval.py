@@ -1,7 +1,7 @@
 """Defines Type, SemVal, and Function classes for the Phosphorus Meaning Engine"""
 
-from ast import Constant, IfExp, parse, unparse, fix_missing_locations
-from ast import Lambda, Call, Expression, Tuple, arguments
+from ast import Constant, IfExp, parse, unparse, fix_missing_locations, literal_eval
+from ast import Lambda, Call, Expression, Tuple, arguments, Name
 from functools import reduce
 from IPython import get_ipython
 
@@ -48,9 +48,10 @@ class Type(tuple,metaclass=TypeMeta):
 class SemVal:
   """Represents a typed semantic value"""
 
-  def __init__(self, s, stype):
+  def __init__(self, s, stype, string=False):
     self.value = s
     self.type = stype
+    self.string = string
 
   def __eq__(self, value):
     return self.value == value
@@ -68,7 +69,8 @@ class SemVal:
     if stype.isfunction():
       try:    return Function(s, stype)
       except: pass
-    return SemVal(s,stype)
+
+    return SemVal(s,stype, isinstance(node, Name))
 
   def _repr_html_(self):
     return f"""{self}
@@ -77,7 +79,7 @@ class SemVal:
           {self.type}</span>"""
 
   def __repr__(self):
-    return repr(self.value)
+    return repr(self.value) if self.string else str(self.value)
 
   def domain(self):
     """Returns the domain of a function, to be overridden by Function"""

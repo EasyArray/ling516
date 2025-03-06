@@ -26,8 +26,8 @@ class Meaning(dict):
     if self.indent and console_handler.level >= logging.DEBUG:
       #logger.warning(f'Using memoization for {k}')
       orig = k
-      #if isinstance(k, list):
-      #  k = str(k)
+      if type(k) == list:
+        k = tuple(k)
       if k not in self.memo:
         self.memo[k] = self.interpret(orig)
       return self.memo[k]
