@@ -5,6 +5,7 @@ language expression.
 
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type
+from nltk import Tree, ImmutableTree
 
 class Meaning(dict):
   """The Meaning class interprets the meaning of a natural language expression."""
@@ -20,11 +21,13 @@ class Meaning(dict):
 
   # This allows us to use m[] for interpretation
   def __getitem__(self, k):
-    if console_handler.level >= logging.WARNING:
+    if isinstance(k, Tree):
+      k = ImmutableTree.convert(k)
+    if self.indent and console_handler.level >= logging.DEBUG:
       #logger.warning(f'Using memoization for {k}')
       orig = k
-      if isinstance(k, list):
-        k = str(k)
+      #if isinstance(k, list):
+      #  k = str(k)
       if k not in self.memo:
         self.memo[k] = self.interpret(orig)
       return self.memo[k]
@@ -39,11 +42,11 @@ class Meaning(dict):
     """Interprets the meaning of a natural language expression alpha."""
     try:
       m = self
-      if not m.indent: 
-        m.print() # Skip a line before the first output
+      if not m.indent:
         self.prev_logger_level = console_handler.level
         memory_handler.buffer.clear()
         self.memo.clear()
+        #logger.warning('Cleared Memo buffer: %s', self.memo)
       m.print('Interpreting', alpha)
       m.indent += m.indent_chars
 
@@ -55,7 +58,11 @@ class Meaning(dict):
         vacuous = [x for x in alpha if m.quiet(m[x]) is None]
         if vacuous:
           m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
+          if isinstance(alpha, ImmutableTree):
+            alpha = Tree.convert(alpha)
           alpha[:] = (x for x in alpha if x not in vacuous)
+          if isinstance(alpha, Tree):
+            alpha = ImmutableTree.convert(alpha)
       
       if not alpha:
         m.print('No non-vacuous children in node', alpha, level=logging.WARNING)
@@ -74,9 +81,9 @@ class Meaning(dict):
       console_handler.setLevel(self.prev_logger_level)
       memory_handler.setLevel(logging.CRITICAL)
       m.print(f'!!! Error interpreting node {alpha}:\n {e}', level=logging.ERROR)
-      if len(memory_handler.buffer) > 0:
-        m.print('Previously silenced output:', level=logging.ERROR)
-        memory_handler.flush()
+      #if len(memory_handler.buffer) > 0:
+        #m.print('Previously silenced output:', level=logging.ERROR)
+        #memory_handler.flush()
       raise e
 
   def rules(m, alpha): # pylint: disable=no-self-argument
@@ -115,7 +122,7 @@ class Meaning(dict):
   def __getattr__(self, s):
     if 'quiet'.startswith(s):
       prev = console_handler.level
-      console_handler.setLevel(logging.WARNING)
+      #console_handler.setLevel(logging.WARNING)
       if memory_handler not in logger.handlers:
         logger.addHandler(memory_handler)
       def run(condition):
