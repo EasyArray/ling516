@@ -7,11 +7,19 @@ from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type
 from nltk import Tree, ImmutableTree
 
+def make_hashable(obj):
+  """Converts an object to a hashable form."""
+  if isinstance(obj, Tree):
+    return ImmutableTree.convert(obj)
+  if isinstance(obj, list):
+    return tuple(make_hashable(x) for x in obj)
+  return obj
+
+
 class Meaning(dict):
   """The Meaning class interprets the meaning of a natural language expression."""
-  
+
   memo = {}
-  
   indent = ''
   indent_chars = '   '
   def print(self, *args, level=logging.INFO):
@@ -21,15 +29,11 @@ class Meaning(dict):
 
   # This allows us to use m[] for interpretation
   def __getitem__(self, k):
-    if isinstance(k, Tree):
-      k = ImmutableTree.convert(k)
+    k = make_hashable(k)
     if self.indent and console_handler.level >= logging.DEBUG:
       #logger.warning(f'Using memoization for {k}')
-      orig = k
-      if type(k) == list:
-        k = tuple(k)
       if k not in self.memo:
-        self.memo[k] = self.interpret(orig)
+        self.memo[k] = self.interpret(k)
       return self.memo[k]
     return self.interpret(k)
 
