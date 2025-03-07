@@ -3,9 +3,9 @@ This module defines the Meaning class, which is used to interpret the meaning of
 language expression.
 """
 
+from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type
-from nltk import Tree, ImmutableTree
 
 def make_hashable(obj):
   """Converts an object to a hashable form."""
@@ -67,9 +67,9 @@ class Meaning(dict):
         vacuous = [x for x in alpha if m[x] is None]
         if vacuous:
           m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
-          logger.warning('With vacuous items removed: %s', [x for x in alpha if x not in vacuous])
+          #logger.warning('With vacuous items removed: %s', [x for x in alpha if x not in vacuous])
           alpha[:] = (x for x in alpha if x not in vacuous)
-          logger.warning('New alpha: %s, Vacuous: %s, v[0] in vac:%s', alpha, vacuous, vacuous[0] in vacuous)
+          #logger.warning('New alpha: %s, Vacuous: %s, v[0] in vac:%s', alpha, vacuous, vacuous[0] in vacuous)
         alpha = make_hashable(alpha)
 
       
