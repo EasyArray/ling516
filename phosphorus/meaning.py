@@ -43,10 +43,10 @@ class Meaning(dict):
     logger.log(level, msg)
 
   def __call__(self, *args):
-    class ParamMeaning:
+    class ParamMeaning(type(self)):
       def __getitem__(_, k):
         return self[k:args]
-    return ParamMeaning()
+    return ParamMeaning(self)
   
   # This allows us to use m[] for interpretation
   def __getitem__(self, k):
