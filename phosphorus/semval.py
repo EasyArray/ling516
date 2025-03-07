@@ -92,7 +92,7 @@ class SemVal:
 class Function(SemVal):
   """Represents a function SemVal"""
 
-  def __init__(self, s, stype):
+  def __init__(self, s, stype, context=None):
     if not stype.isfunction():
       raise ValueError(f'Invalid type for "{s}": {stype}')
 
@@ -112,7 +112,8 @@ class Function(SemVal):
         value = unparse(body)
       case _:
         raise ValueError(f'Invalid lambda expression: {s}')
-  
+
+    self.context = context if context else {}
     super().__init__(value, stype)
 
   def __call__(self, *args):
@@ -135,7 +136,7 @@ class Function(SemVal):
       exprnode = Expression(body=node)
       fix_missing_locations(exprnode)
       code = compile(exprnode, '<string>', 'eval')
-      value = eval(code, get_ipython().user_ns, context) # pylint: disable=eval-used
+      value = eval(code, get_ipython().user_ns, self.context | context) # pylint: disable=eval-used
       return value
     except Exception as e:
       logger.debug(f'Error evaluating {unparse(node)}: {e}')

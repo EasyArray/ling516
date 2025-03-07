@@ -15,10 +15,10 @@ class VariableReplacer(NodeTransformer):
     """Handle function calls."""
     func = self.visit(node.func)
     if isinstance(func, Lambda):
-      vars = {arg.arg for arg in func.args.args}
+      params = {arg.arg for arg in func.args.args}
       for arg in node.args:
         self.visit(arg)
-      context = self.context | dict(zip(vars, node.args))
+      context = self.context | dict(zip(params, node.args))
       #print('new context', context)
       return VariableReplacer(context).visit(func.body)
 

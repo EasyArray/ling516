@@ -91,7 +91,7 @@ class Meaning(dict):
         alpha = make_hashable(alpha)
 
       
-      if not alpha:
+      if isinstance(alpha, (tuple, list)) and len(alpha) == 0:
         m.print('No non-vacuous children in node', alpha, level=logging.WARNING)
         value, rule = None, 'NN'
       else:

@@ -4,6 +4,7 @@ natural language semantics in the style of Heim & Kratzer (1998)."""
 
 from ast import NodeTransformer, parse, dump, unparse, fix_missing_locations
 from ast import Lambda, Constant, Call, Name, Attribute, Load, FunctionDef, arguments, Expression
+from inspect import getclosurevars
 
 from IPython import get_ipython
 from .logs import logger, console_handler, memory_handler, logging
@@ -20,12 +21,24 @@ class ExprTransformer(NodeTransformer):
       case Attribute(value=Constant() as semval,
                     attr=stype) if not hasattr(str, stype):
         node.value = Name(id='Type', ctx=Load())
-      case _: return node
-    out = Call(func=Attribute(value=Name(id='SemVal', ctx=Load()),
-                              attr='create', ctx=Load()),
-                args=[semval, node], keywords=[])
-    #print(dump(out))
-    return out
+        return Call(func=Attribute(value=Name(id='SemVal', ctx=Load()),
+                                   attr='create', ctx=Load()),
+                    args=[semval, node], keywords=[])
+
+      case Attribute(value=Lambda() as lam, attr=stype):
+        semval = Constant(value=unparse(lam).strip())
+        node.value = Name(id='Type', ctx=Load())
+        context_node = Attribute(value=Call(func=Name(id='getclosurevars', ctx=Load()),
+                                            args=[lam], keywords=[]),
+                                  attr='nonlocals', ctx=Load())
+
+        out = Call(func=Name(id='Function', ctx=Load()),
+                    args=[semval, node, context_node], keywords=[])
+        fix_missing_locations(out)
+        print(dump(out))
+        return out
+
+    return node
 
 # Add the ExprTransformer to the IPython AST transformers
 ip_asts = get_ipython().ast_transformers
