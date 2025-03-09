@@ -1,7 +1,8 @@
 """
 This module contains the implementation of the lambda calculus.
 """
-from ast import AST, Constant, Lambda, NodeTransformer
+from ast import AST, Constant, Lambda, NodeTransformer, parse
+from .logs import logger
 
 #pylint: disable=invalid-name
 
@@ -19,7 +20,7 @@ class VariableReplacer(NodeTransformer):
       for arg in node.args:
         self.visit(arg)
       context = self.context | dict(zip(params, node.args))
-      #print('new context', context)
+      #logger.debug('new context: %s', context)
       return VariableReplacer(context).visit(func.body)
 
     self.generic_visit(node)
@@ -37,10 +38,11 @@ class VariableReplacer(NodeTransformer):
   def visit_Name(self, node):
     """Handle variable names."""
     if node.id in self.context:
-      #print(f'Replacing {node.id} with {self.context[node.id]}, {type(self.context[node.id])}')
+      #logger.warning(f'Replacing {node.id} with {self.context[node.id]}, {type(self.context[node.id])}')
       if isinstance(self.context[node.id], AST):
         return self.context[node.id]
       if hasattr(self.context[node.id], 'to_ast'):
         return self.context[node.id].to_ast()
-      return Constant(value=str(self.context[node.id]))
+      #return Constant(value=str(self.context[node.id]))
+      return parse(repr(self.context[node.id]), mode='eval').body
     return node

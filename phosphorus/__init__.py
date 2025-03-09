@@ -35,7 +35,7 @@ class ExprTransformer(NodeTransformer):
         out = Call(func=Name(id='Function', ctx=Load()),
                     args=[semval, node, context_node], keywords=[])
         fix_missing_locations(out)
-        print(dump(out))
+        #print(dump(out))
         return out
 
     return node

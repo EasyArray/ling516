@@ -1,6 +1,6 @@
 """Defines Type, SemVal, and Function classes for the Phosphorus Meaning Engine"""
 
-from ast import Constant, IfExp, parse, unparse, fix_missing_locations, literal_eval
+from ast import Constant, IfExp, parse, unparse, fix_missing_locations, literal_eval, dump
 from ast import Lambda, Call, Expression, Tuple, arguments, Name
 from functools import reduce
 from IPython import get_ipython
@@ -122,7 +122,7 @@ class Function(SemVal):
     node = parse(self.value, mode='eval').body
     context = dict(zip(self.vars, args))
     node = VariableReplacer(context).visit(node)
-    #print(dump(node))
+    #logger.debug('Context %s, Node %s', context, dump(node))
 
     out_type = self.type.output()
     if isinstance(node, Lambda):
