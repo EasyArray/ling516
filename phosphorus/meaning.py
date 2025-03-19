@@ -57,12 +57,10 @@ class Meaning(dict):
     if isinstance(k, slice):
       args = k.stop
       k = k.start
-    return self._interpret(k, args)
+    return self.i(k, args)
   
-  def _interpret(self, k, args):
+  def i(self, k, *args):
     k = make_hashable(k)
-    if not isinstance(args, (tuple, list)):
-      args = (args,)
     if self.indent:
       hargs = make_hashable(args)
       if (k, hargs) not in self.memo:

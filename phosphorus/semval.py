@@ -64,11 +64,17 @@ class PV():
       return node
 
     node_class = builtins.type(node)
-    instance = node_class.__new__(builtins.type(
+    dynamic_class = builtins.type(
         node_class.__name__,  # name matches AST node class
         (cls, node_class),
         {}
-    ))
+    )
+    try:
+      instance = node_class.__new__(dynamic_class)
+    except TypeError:
+      instance = object.__new__(dynamic_class)
+
+
     instance._input_node = node
     return instance
 
