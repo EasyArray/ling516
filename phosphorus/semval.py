@@ -1,12 +1,14 @@
 """Defines Type, SemVal, and Function classes for the Phosphorus Meaning Engine"""
 
-from ast import Constant, IfExp, parse, unparse, fix_missing_locations, literal_eval, dump
-from ast import Lambda, Call, Expression, Tuple, arguments, Name
+from ast import parse, unparse, fix_missing_locations, iter_fields, literal_eval, dump
+from ast import Lambda, Call, Expression, Tuple, arguments, Name, Constant, IfExp, AST
 from functools import reduce
+from inspect import getclosurevars
+import builtins
 from IPython import get_ipython
 
 from .logs import logger
-from .lambda_calc import VariableReplacer
+from .lambda_calc import VariableReplacer, Simplifier, free_vars
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -44,6 +46,65 @@ class Type(tuple,metaclass=TypeMeta):
     if len(self) == 1:
       return repr(self[0])  # remove parens from simple types
     return super().__repr__()
+
+
+class PV():
+  def __new__(cls, node, closure=lambda:{}, type=None):
+    if isinstance(node, PV):      
+      return node #Question: Simplify or not?
+    if isinstance(node, str):
+      node = parse(node, mode='eval').body
+
+    global_vars = {x: globals()[x] for x in free_vars(node) if x in globals()}
+    user_ns = get_ipython().user_ns
+    global_vars |= {x: user_ns[x] for x in free_vars(node) if x in user_ns}
+    node = Simplifier(global_vars | getclosurevars(closure).nonlocals).visit(node)
+
+    if isinstance(node, PV):
+      return node
+
+    node_class = builtins.type(node)
+    instance = node_class.__new__(builtins.type(
+        node_class.__name__,  # name matches AST node class
+        (cls, node_class),
+        {}
+    ))
+    instance._input_node = node
+    return instance
+
+  def __init__(self, node, closure=None, type=None):
+    if hasattr(self,'fields_filled'):
+      if type is not None:
+        self.type = type
+      repr(self)
+      return
+
+    node = self._input_node
+    self.type = getattr(node, 'type', None) if type is None else type
+    for field, value in iter_fields(node):
+      setattr(self, field, value)
+    fix_missing_locations(self)
+    self.fields_filled = True
+    repr(self)
+
+  def __hash__(self):
+    return hash(dump(self))
+  
+  def __eq__(self, other):
+    if isinstance(other, AST):
+      return dump(self) == dump(other)
+    return repr(self) == repr(other)
+  
+  def __repr__(self):
+    if not hasattr(self, 'repr'):
+      self.repr = unparse(self)
+    return self.repr
+
+  def _repr_html_(self):
+    return f"""{self}
+        <span style='float:right; font-family:monospace; margin-right:75px;
+              font-weight:bold; background-color:#e5e5ff; color:#000'>
+          {self.type}</span>"""
 
 class SemVal:
   """Represents a typed semantic value"""

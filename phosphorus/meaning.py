@@ -5,7 +5,7 @@ language expression.
 
 from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
-from .semval import Function, Type
+from .semval import Function, Type, PV
 
 class ImmutableDict(tuple):
   """A subclass of tuple to indicate the original object was a dictionary."""
@@ -48,15 +48,22 @@ class Meaning(dict):
         return self[k:args]
     return ParamMeaning(self)
   
+  def __repr__(self):
+    return object.__repr__(self)
+  
   # This allows us to use m[] for interpretation
   def __getitem__(self, k):
     args = ()
     if isinstance(k, slice):
       args = k.stop
       k = k.start
+    return self._interpret(k, args)
+  
+  def _interpret(self, k, args):
     k = make_hashable(k)
+    if not isinstance(args, (tuple, list)):
+      args = (args,)
     if self.indent:
-      #logger.warning(f'Using memoization for {k}')
       hargs = make_hashable(args)
       if (k, hargs) not in self.memo:
         self.memo[k,hargs] = self.interpret(k, *args)
