@@ -59,8 +59,8 @@ class Simplifier(NodeTransformer):
     if not isinstance(node, expr):
       return node
 
-    print('visiting', unparse(node), dump(node), get_type(node))
-    print('CONTEXT', self.context.keys())#{k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
+    logger.debug('visiting %s %s %s', unparse(node), dump(node), get_type(node))
+    logger.debug('CONTEXT %s', self.context.keys())#{k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
     try:      
       expr_node = Expression(body=node)
       fix_missing_locations(expr_node)
