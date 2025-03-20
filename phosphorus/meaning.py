@@ -3,7 +3,7 @@ This module defines the Meaning class, which is used to interpret the meaning of
 language expression.
 """
 
-from ast import AST
+from ast import AST, unparse, dump
 from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type, PV
@@ -19,6 +19,8 @@ def make_hashable(obj):
     return ImmutableTree.convert(obj)
   if isinstance(obj, (list,tuple)):
     return tuple(make_hashable(x) for x in obj)
+  if isinstance(obj, AST):
+    return dump(obj)
   return obj
 
 def make_mutable(obj):
@@ -61,40 +63,48 @@ class Meaning(dict):
     return self.i(k, args)
   
   def i(self, k, *args:AST):
+    if not self.indent:
+        self.memo.clear()
+        #logger.debug('Cleared Memo buffer: %s', self.memo)
     k = make_hashable(k)
     if self.indent:
       hargs = make_hashable(args)
       if (k, hargs) not in self.memo:
         self.memo[k,hargs] = self.interpret(k, *args)
+        logger.debug('Memoizing value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
+      else:
+        logger.debug('Using memoized value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
       return self.memo[k,hargs]
     return self.interpret(k, *args)
 
   # Just look up a word in the lexicon
   def lookup(self, word):
     """Used to simply look up a word in the lexicon without further interpretation"""
-    return super().get(word, None)
+    out = super().get(word, None)
+    if isinstance(out, PV):
+      out = out.copy()
+    logger.debug('Lookup for %s: %s (%s)', word, out, type(out))
+    return out
 
   def interpret(self, alpha, *args):
     """Interprets the meaning of a natural language expression alpha."""
     try:
       m = self
-      if not m.indent:  #TODO: move this to __getitem__?
-        self.memo.clear()
-        #logger.warning('Cleared Memo buffer: %s', self.memo)
-      m.print('Interpreting', alpha, 'with parameters:', args)
+      m.print('Interpreting', alpha, 'with parameters:',
+              [unparse(arg) if isinstance(arg, AST) else arg for arg in args])
       m.indent += m.indent_chars
 
       if isinstance(alpha, (tuple, list)): #TODO: do this once at the beginning?
         if len(alpha) == 0:
           raise ValueError(f'Node {alpha} has no children')
-        alpha = make_mutable(alpha)
-        vacuous = [x for x in alpha if m.i(x,*args) is None]
-        if vacuous:
-          m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
-          #logger.warning('With vacuous items removed: %s', [x for x in alpha if x not in vacuous])
-          alpha[:] = (x for x in alpha if x not in vacuous)
-          #logger.warning('New alpha: %s, Vacuous: %s, v[0] in vac:%s', alpha, vacuous, vacuous[0] in vacuous)
-        alpha = make_hashable(alpha)
+        # alpha = make_mutable(alpha)
+        # vacuous = [x for x in alpha if m.i(x,*args) is None]
+        # if vacuous:
+        #   m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
+        #   #logger.warning('With vacuous items removed: %s', [x for x in alpha if x not in vacuous])
+        #   alpha[:] = (x for x in alpha if x not in vacuous)
+        #   #logger.warning('New alpha: %s, Vacuous: %s, v[0] in vac:%s', alpha, vacuous, vacuous[0] in vacuous)
+        # alpha = make_hashable(alpha)
 
       
       if isinstance(alpha, (tuple, list)) and len(alpha) == 0:

@@ -1,6 +1,7 @@
 """
 This module contains the implementation of the lambda calculus.
 """
+import builtins
 from ast import *
 from string import ascii_lowercase
 from inspect import signature
@@ -16,6 +17,7 @@ exec('from ast import *', AST_ENV)
 
 def toast(x, type = None, code_string=True):
   if isinstance(x, AST):
+    #logger.debug('toasting AST %s %s', dump(x), builtins.type(x))
     out = x
   else:
     if not code_string:
@@ -32,8 +34,10 @@ def evast(node, context={}):
   expr_node = Expression(body=node)
   fix_missing_locations(expr_node)
   compiled  = compile(expr_node, '<AST>', 'eval')
-  env       = AST_ENV | get_ipython().user_ns
+  env       = AST_ENV #| get_ipython().user_ns
+  #logger.debug('EVAST IN %s', unparse(node))
   evaled    = eval(compiled, env, context.copy())
+  #logger.debug('EVAST OUT %s (%s)', evaled, type(evaled))
   return evaled
 
 def get_type(x):
@@ -63,7 +67,7 @@ class Simplifier(NodeTransformer):
     # TODO: introduce globals here? pare down based on free_vars in vist?
     self.context = {} if context is None else context
     self.context.update(kwargs)
-    #print('SIMPLIFIER', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
+    #logger.debug('SIMPLIFIER %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
 
   def visit(self, node):
     node = toast(node)
@@ -71,7 +75,7 @@ class Simplifier(NodeTransformer):
       return node
 
     logger.debug('visiting %s %s %s', unparse(node), dump(node), get_type(node))
-    logger.debug('CONTEXT %s', self.context.keys())#{k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
+    logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
     try:
       evaled    = evast(node, self.context)
       node.evaled = True
@@ -79,7 +83,8 @@ class Simplifier(NodeTransformer):
         raise TypeError(f'Unable to inline code {unparse(node)}')
       toasted   = toast(evaled, code_string=False)
       toasted.evaled = True
-      logger.debug('Evaluated %s to %s', unparse(node), unparse(toasted))
+      logger.debug('Evaluated %s to %s (%s)', unparse(node), unparse(toasted), type(evaled))
+      logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
       return toasted
     except (SyntaxError,Exception) as e:
       logger.debug('Error evaluating %s %s', unparse(node), dump(node))
@@ -91,7 +96,7 @@ class Simplifier(NodeTransformer):
 
 
   def visit_Call(self, node):
-    logger.debug('CALL visiting Call %s\n%s', unparse(node), dump(node))
+    #logger.debug('CALL visiting Call %s\n%s', unparse(node), dump(node))
     self.generic_visit(node)
     try:
       _, out_type = get_type(node.func)
@@ -112,7 +117,7 @@ class Simplifier(NodeTransformer):
           func = evast(node.func, self.context)
           sig = signature(func)
           ast_typed = [issubclass(p.annotation, AST) for p in sig.parameters.values()]
-          logger.debug('AST TYPED %s %s', ast_typed, sig.parameters)
+          #logger.debug('AST TYPED %s %s', ast_typed, sig.parameters)
           if any(ast_typed):
             arg_ast_pairs = zip_longest(node.args, ast_typed, fillvalue=ast_typed[-1])
             ast_params = [toast(dump(arg)) if is_ast and not getattr(arg, 'evaled', False) else arg 
@@ -126,7 +131,7 @@ class Simplifier(NodeTransformer):
             out = toast(self.visit(new_node), out_type)
             return out
         except (SyntaxError, Exception) as e:
-          print('Error evaluating Call', e)
+          logger.debug('Error evaluating Call: %s', e)
     return toast(node, get_type(node) if get_type(node) else out_type)
 
   def visit_Name(self, node):
@@ -136,7 +141,7 @@ class Simplifier(NodeTransformer):
       try:
         return toast(out, get_type(node))
       except (SyntaxError, Exception) as e:
-        logger.debug('Error toasting %s: %s', node.id, e)
+        #logger.debug('Error toasting %s: %s', node.id, e)
         return node
     return node
 

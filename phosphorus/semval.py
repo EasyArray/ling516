@@ -93,6 +93,9 @@ class PV():
     self.fields_filled = True
     repr(self)
 
+  def copy(self):
+    return PV(unparse(self), type=self.type)
+
   def __hash__(self):
     return hash(dump(self))
   
@@ -102,6 +105,7 @@ class PV():
     return repr(self) == repr(other)
   
   def __repr__(self):
+    return unparse(self)
     if not hasattr(self, 'repr'):
       self.repr = unparse(self)
     return self.repr
