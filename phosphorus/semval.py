@@ -8,7 +8,7 @@ import builtins
 from IPython import get_ipython
 
 from .logs import logger
-from .lambda_calc import VariableReplacer, Simplifier, free_vars
+from .lambda_calc import VariableReplacer, Simplifier, free_vars, evast
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -95,6 +95,10 @@ class PV():
 
   def copy(self):
     return PV(unparse(self), type=self.type)
+  
+  def eval(self):
+    return evast(self)
+
 
   def __hash__(self):
     return hash(dump(self))
