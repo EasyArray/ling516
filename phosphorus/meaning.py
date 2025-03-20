@@ -112,7 +112,7 @@ class Meaning(dict):
         value, rule = None, 'NN'
       else:
         value, rule = self.rules(alpha, *args)
-        if value is None and rule != 'TN': #fix
+        if value is None and rule not in ('TN', 'NN'): #fix
           children = ' and '.join(map(str, alpha))
           raise ValueError(f'No rule found to combine {children}')
 
