@@ -65,18 +65,20 @@ class Meaning(dict):
   def i(self, k, *args:AST):
     if not self.indent:
         self.memo.clear()
-        #logger.debug('Cleared Memo buffer: %s', self.memo)
+        logger.debug('Cleared Memo buffer: %s', self.memo)
     k = make_hashable(k)
-    if self.indent:
-      hargs = make_hashable(args)
-      if (k, hargs) not in self.memo:
+    hargs = make_hashable(args)
+    if (k, hargs) not in self.memo:
+      try:
         self.memo[k,hargs] = self.interpret(k, *args)
         logger.debug('Memoizing value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
-      else:
-        logger.debug('Using memoized value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
-      return self.memo[k,hargs]
-    return self.interpret(k, *args)
-
+      except Exception as e:
+        self.print('Error interpreting (%s, %s): %s' % (k, args, e))
+        return None
+    else:
+      logger.debug('Using memoized value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
+    return self.memo[k,hargs]
+    
   # Just look up a word in the lexicon
   def lookup(self, word):
     """Used to simply look up a word in the lexicon without further interpretation"""
@@ -114,14 +116,17 @@ class Meaning(dict):
         value, rule = self.rules(alpha, *args)
         if value is None and rule not in ('TN', 'NN'): #fix
           children = ' and '.join(map(str, alpha))
-          raise ValueError(f'No rule found to combine {children}')
+          #raise ValueError(f'No rule found to combine {children}')
+          m.print(f'No rule found to combine {children}', level=logging.ERROR)
 
       m.indent = m.indent[:-len(m.indent_chars)]
       m.print('=>', alpha, '=', value, f'\t({rule})')
       return value
     except Exception as e:
-      self.indent = ''
-      m.print(f'!!! Error interpreting node {alpha}:\n {e}', level=logging.ERROR)
+      #self.indent = ''
+      m.print(f'!!! Error interpreting node {alpha}:', level=logging.ERROR)
+      m.print(e, level=logging.ERROR)
+      self.indent = self.indent.removesuffix(self.indent_chars)
       raise e
 
   def rules(m, alpha, *args): # pylint: disable=no-self-argument

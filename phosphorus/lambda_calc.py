@@ -79,7 +79,7 @@ class Simplifier(NodeTransformer):
     try:
       evaled    = evast(node, self.context)
       node.evaled = True
-      if getattr(node, 'inlined', False) and not isinstance(evaled, AST):
+      if getattr(node, 'inlined', False) and evaled is not None and not isinstance(evaled, AST):
         raise TypeError(f'Unable to inline code {unparse(node)}')
       toasted   = toast(evaled, code_string=False)
       toasted.evaled = True
