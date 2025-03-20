@@ -34,7 +34,7 @@ def evast(node, context={}):
   expr_node = Expression(body=node)
   fix_missing_locations(expr_node)
   compiled  = compile(expr_node, '<AST>', 'eval')
-  env       = AST_ENV #| get_ipython().user_ns
+  env       = AST_ENV | get_ipython().user_ns
   #logger.debug('EVAST IN %s', unparse(node))
   evaled    = eval(compiled, env, context.copy())
   #logger.debug('EVAST OUT %s (%s)', evaled, type(evaled))
