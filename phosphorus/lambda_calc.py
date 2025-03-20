@@ -3,10 +3,13 @@ This module contains the implementation of the lambda calculus.
 """
 from ast import *
 from string import ascii_lowercase
+from inspect import signature
+from itertools import zip_longest
 from IPython import get_ipython
 from .logs import logger
 
 #pylint: disable=invalid-name
+  
 
 AST_ENV = {}
 exec('from ast import *', AST_ENV)
@@ -24,6 +27,14 @@ def toast(x, type = None, code_string=True):
     out.type = type
 
   return out
+
+def evast(node, context={}):
+  expr_node = Expression(body=node)
+  fix_missing_locations(expr_node)
+  compiled  = compile(expr_node, '<AST>', 'eval')
+  env       = AST_ENV | get_ipython().user_ns
+  evaled    = eval(compiled, env, context.copy())
+  return evaled
 
 def get_type(x):
   if hasattr(x, 'type'):
@@ -61,15 +72,13 @@ class Simplifier(NodeTransformer):
 
     logger.debug('visiting %s %s %s', unparse(node), dump(node), get_type(node))
     logger.debug('CONTEXT %s', self.context.keys())#{k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
-    try:      
-      expr_node = Expression(body=node)
-      fix_missing_locations(expr_node)
-      compiled  = compile(expr_node, '<AST>', 'eval')
-      env       = AST_ENV | get_ipython().user_ns
-      evaled    = eval(compiled, env, self.context.copy())
+    try:
+      evaled    = evast(node, self.context)
+      node.evaled = True
       if getattr(node, 'inlined', False) and not isinstance(evaled, AST):
         raise TypeError(f'Unable to inline code {unparse(node)}')
       toasted   = toast(evaled, code_string=False)
+      toasted.evaled = True
       logger.debug('Evaluated %s to %s', unparse(node), unparse(toasted))
       return toasted
     except (SyntaxError,Exception) as e:
@@ -84,7 +93,6 @@ class Simplifier(NodeTransformer):
   def visit_Call(self, node):
     logger.debug('CALL visiting Call %s\n%s', unparse(node), dump(node))
     self.generic_visit(node)
-
     try:
       _, out_type = get_type(node.func)
     except (ValueError, TypeError):
@@ -101,13 +109,22 @@ class Simplifier(NodeTransformer):
         # TRY to call the function on the ast nodes of its arguments instead of the arguments
         # themselves. TODO: check args individually? or update context instead?
         try:
-          ast_params = [arg if isinstance(arg, Constant) else toast(dump(arg)) for arg in node.args]
-          logger.debug('AST PARAMS %s %s', [arg for arg in node.args], [unparse(p) for p in ast_params])
-          new_node = toast(Call(func=node.func, args=ast_params, keywords=node.keywords), get_type(node))
-          fix_missing_locations(new_node)
-          new_node.inlined = True
-          out = toast(self.visit(new_node), out_type)
-          return out
+          func = evast(node.func, self.context)
+          sig = signature(func)
+          ast_typed = [issubclass(p.annotation, AST) for p in sig.parameters.values()]
+          logger.debug('AST TYPED %s %s', ast_typed, sig.parameters)
+          if any(ast_typed):
+            arg_ast_pairs = zip_longest(node.args, ast_typed, fillvalue=ast_typed[-1])
+            ast_params = [toast(dump(arg)) if is_ast and not getattr(arg, 'evaled', False) else arg 
+                          for arg,is_ast in arg_ast_pairs]
+            logger.debug('AST PARAMS %s %s', 
+                         [(arg, getattr(arg, 'evaled', False)) for arg in node.args], 
+                         [unparse(p) for p in ast_params])
+            new_node = toast(Call(func=node.func, args=ast_params, keywords=node.keywords), get_type(node))
+            fix_missing_locations(new_node)
+            new_node.inlined = True
+            out = toast(self.visit(new_node), out_type)
+            return out
         except (SyntaxError, Exception) as e:
           print('Error evaluating Call', e)
     return toast(node, get_type(node) if get_type(node) else out_type)

@@ -3,6 +3,7 @@ This module defines the Meaning class, which is used to interpret the meaning of
 language expression.
 """
 
+from ast import AST
 from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type, PV
@@ -59,7 +60,7 @@ class Meaning(dict):
       k = k.start
     return self.i(k, args)
   
-  def i(self, k, *args):
+  def i(self, k, *args:AST):
     k = make_hashable(k)
     if self.indent:
       hargs = make_hashable(args)
@@ -87,7 +88,7 @@ class Meaning(dict):
         if len(alpha) == 0:
           raise ValueError(f'Node {alpha} has no children')
         alpha = make_mutable(alpha)
-        vacuous = [x for x in alpha if m[x:args] is None]
+        vacuous = [x for x in alpha if m.i(x,*args) is None]
         if vacuous:
           m.print('Removing vacuous items:', vacuous, level=logging.WARNING)
           #logger.warning('With vacuous items removed: %s', [x for x in alpha if x not in vacuous])
