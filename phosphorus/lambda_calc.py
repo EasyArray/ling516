@@ -172,6 +172,16 @@ class Simplifier(NodeTransformer):
                           values=list(combined.values())), get_type(node))
     return node
 
+  def visit_BoolOp(self, node):
+    self.generic_visit(node)
+    match node:
+      case BoolOp(op=And(), values=values):
+        if any(isinstance(v, Constant) and not v.value for v in values):
+          return toast(Constant(value=False), get_type(node))
+        if all(isinstance(v, Constant) and v.value for v in values):
+          return toast(Constant(value=True), get_type(node))
+    return node
+
   def visit_Subscript(self, node):
     self.generic_visit(node)
     #print('SUBSCRIPT', unparse(node), dump(node))
