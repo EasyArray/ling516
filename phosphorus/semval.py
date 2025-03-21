@@ -40,13 +40,27 @@ class Type(tuple,metaclass=TypeMeta):
   
   # Allows `x in Type.<type>` to check if x is of type <type>
   def __contains__(self, x):
-    return x.type == self
+    return getattr(x,'type', None) == self
 
   def __repr__(self):
     if len(self) == 1:
       return repr(self[0])  # remove parens from simple types
     return super().__repr__()
 
+def takes(f,x):
+  try:
+    if f.eval() is None or x.eval() is None:
+      return False
+  except: pass
+  f_type = getattr(f, 'type', [])
+  x_type = getattr(x, 'type', None)
+  if len(f_type) == 2:
+    if f_type[0] == x_type:
+      try:
+        return PV(f(x) is not None).eval()
+      except Exception as e:
+        return True
+  return False
 
 class PV():
   def __new__(cls, node, closure=lambda:{}, type=None):

@@ -8,6 +8,8 @@ from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type, PV
 
+VACUOUS = object()
+
 class ImmutableDict(tuple):
   """A subclass of tuple to indicate the original object was a dictionary."""
 

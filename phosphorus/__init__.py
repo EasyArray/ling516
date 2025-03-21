@@ -7,11 +7,12 @@ natural language semantics in the style of Heim & Kratzer (1998)."""
 from ast import NodeTransformer, parse, dump, unparse, fix_missing_locations, keyword
 from ast import Lambda, Constant, Call, Name, Attribute, Load, FunctionDef, arguments, Expression
 from inspect import getclosurevars
+from string import ascii_uppercase
 
 from IPython import get_ipython
 from .logs import logger, console_handler, memory_handler, logging
-from .semval import SemVal, Type, Function, PV
-from .meaning import Meaning
+from .semval import SemVal, Type, Function, PV, takes
+from .meaning import Meaning, VACUOUS
 
 class ExprTransformer(NodeTransformer):
   """Transforms expressions of the form '...'.<type> into SemVal objects."""
@@ -76,6 +77,23 @@ class Predicate(set):
   """A set of tuples representing a predicate."""
   def __call__(self, *args):
     return int(args in self) # converts True/False to 1/0
+
+
+DOMAIN = [PV(c, type=Type.e) for c in ascii_uppercase]
+
+def charset(f, domain = None):
+  if domain is None:
+    domain = DOMAIN
+  return {c for c in domain if f(c)}
+
+def iota(f, domain = None):
+  return tuple(charset(f,domain))[0]
+
+def single(s):
+  return len(s)==1
+
+def empty(s):
+  return len(s)==0
 
 
 # Splash screen
