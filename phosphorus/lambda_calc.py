@@ -98,9 +98,9 @@ class Simplifier(NodeTransformer):
 
 
   def visit_Call(self, node):
-    logger.warning('CALL visiting Call %s\n%s', unparse(node), dump(node))
+    logger.debug('CALL visiting Call %s\n%s', unparse(node), dump(node))
     self.generic_visit(node)
-    logger.warning('AFTER generic visit %s\n%s', unparse(node), dump(node))
+    #logger.warning('AFTER generic visit %s\n%s', unparse(node), dump(node))
     try:
       _, out_type = get_type(node.func)
     except (ValueError, TypeError):
@@ -117,7 +117,7 @@ class Simplifier(NodeTransformer):
         # TRY to call the function on the ast nodes of its arguments instead of the arguments
         # themselves. TODO: check args individually? or update context instead?
         try:
-          func = evast(node.func, self.context)
+          func = evast(node.func, self.context, self.env)
           sig = signature(func)
           ast_typed = [issubclass(p.annotation, AST) for p in sig.parameters.values()]
           #logger.debug('AST TYPED %s %s', ast_typed, sig.parameters)
@@ -157,21 +157,21 @@ class Simplifier(NodeTransformer):
           for f in free_vars(value)
     }
 
-    logger.warning('LAMBDA: %s', unparse(node))
-    logger.warning('FREE IN BODY %s', free_in_body)
-    logger.warning('FREE IN REPLACEMENTS %s', free_in_replacements)
+    #logger.warning('LAMBDA: %s', unparse(node))
+    #logger.warning('FREE IN BODY %s', free_in_body)
+    #logger.warning('FREE IN REPLACEMENTS %s', free_in_replacements)
     alpha_conversions = {}
     for arg in node.args.args:
       if arg.arg in free_in_replacements:
         new_param = new_var(arg.arg, free_in_body | free_in_replacements)
         alpha_conversions[arg.arg] = Name(id=new_param, ctx=Load())
-        logger.warning('REPLACING %s with %s, ctx %s', arg.arg, new_param, alpha_conversions[arg.arg])
+        #logger.warning('REPLACING %s with %s, ctx %s', arg.arg, new_param, alpha_conversions[arg.arg])
         arg.arg = new_param
-    logger.warning('CONVERSIONS %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in alpha_conversions.items()})
+    #logger.warning('CONVERSIONS %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in alpha_conversions.items()})
     if alpha_conversions:
-      logger.warning('OLD LAMBDA %s', unparse(node))
+      #logger.warning('OLD LAMBDA %s', unparse(node))
       Simplifier(alpha_conversions, {}).generic_visit(node)
-      logger.warning('NEW LAMBDA %s', unparse(node))
+      #logger.warning('NEW LAMBDA %s', unparse(node))
     return Simplifier(context).generic_visit(node)
 
   def visit_BinOp(self, node):
