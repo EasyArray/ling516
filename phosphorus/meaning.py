@@ -3,7 +3,7 @@ This module defines the Meaning class, which is used to interpret the meaning of
 language expression.
 """
 
-from ast import AST, unparse, dump
+from ast import AST, unparse, dump, parse
 from nltk import Tree, ImmutableTree
 from .logs import logger, console_handler, memory_handler, logging
 from .semval import Function, Type, PV
@@ -85,7 +85,9 @@ class Meaning(dict):
     out = self.memo[k,hargs]
     if not self.indent:
       try:
-        out = out.eval()
+        evaled = out.eval()
+        parse(repr(evaled))
+        out = evaled
       except: pass
     return out
     
