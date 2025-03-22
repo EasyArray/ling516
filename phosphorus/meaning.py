@@ -82,7 +82,12 @@ class Meaning(dict):
         return None
     else:
       logger.debug('Using memoized value for (%s, %s): %s', k, hargs, self.memo[k,hargs])
-    return self.memo[k,hargs]
+    out = self.memo[k,hargs]
+    if not self.indent:
+      try:
+        out = out.eval()
+      except: pass
+    return out
     
   # Just look up a word in the lexicon
   def lookup(self, word):

@@ -76,13 +76,15 @@ ip_asts.append(ExprTransformer())
 class Predicate(set):
   """A set of tuples representing a predicate."""
   def __call__(self, *args):
+    if any(a not in DOMAIN for a in args):
+      raise TypeError(f'Predicates only take individuals in the DOMAIN, got: {args}')
     return int(args in self) # converts True/False to 1/0
   
   def __repr__(self):
     return '<Predicate: %s>' % super().__repr__()
 
 
-DOMAIN = [PV(c, type=Type.e) for c in ascii_uppercase]
+DOMAIN = [PV(repr(c), type=Type.e) for c in ascii_uppercase]
 
 def charset(f, domain = None):
   if domain is None:
