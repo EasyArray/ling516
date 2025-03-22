@@ -98,7 +98,8 @@ class Meaning(dict):
     try:
       m = self
       m.print('Interpreting', alpha, 'with parameters:',
-              [unparse(arg) if isinstance(arg, AST) else arg for arg in args])
+              [(unparse(arg), getattr(arg, 'type', None)) 
+               if isinstance(arg, AST) else arg for arg in args])
       m.indent += m.indent_chars
 
       if isinstance(alpha, (tuple, list)): #TODO: do this once at the beginning?
@@ -125,7 +126,7 @@ class Meaning(dict):
           m.print(f'No rule found to combine {children}', level=logging.ERROR)
 
       m.indent = m.indent[:-len(m.indent_chars)]
-      m.print('=>', alpha, '=', value, f'\t({rule})')
+      m.print('=>', alpha, '=', value, f' type: {getattr(value, 'type', None)}\t({rule})')
       return value
     except Exception as e:
       #self.indent = ''

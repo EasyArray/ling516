@@ -113,8 +113,9 @@ class PV():
   def eval(self):
     return evast(self)
 
-
   def __hash__(self):
+    if isinstance(self, Constant):
+      return hash(self.value)
     return hash(dump(self))
   
   def __eq__(self, other):

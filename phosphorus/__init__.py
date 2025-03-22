@@ -77,6 +77,9 @@ class Predicate(set):
   """A set of tuples representing a predicate."""
   def __call__(self, *args):
     return int(args in self) # converts True/False to 1/0
+  
+  def __repr__(self):
+    return '<Predicate: %s>' % super().__repr__()
 
 
 DOMAIN = [PV(c, type=Type.e) for c in ascii_uppercase]
