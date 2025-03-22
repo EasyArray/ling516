@@ -30,11 +30,11 @@ def toast(x, type = None, code_string=True):
 
   return out
 
-def evast(node, context={}):
+def evast(node, context={}, env=None):
   expr_node = Expression(body=node)
   fix_missing_locations(expr_node)
   compiled  = compile(expr_node, '<AST>', 'eval')
-  env       = AST_ENV | get_ipython().user_ns
+  env       = AST_ENV | (get_ipython().user_ns if env is None else env)
   #logger.debug('EVAST IN %s', unparse(node))
   evaled    = eval(compiled, env, context.copy())
   #logger.debug('EVAST OUT %s (%s)', evaled, type(evaled))
@@ -63,10 +63,11 @@ def new_var(old, avoid='', vars=ascii_lowercase):
     return new_var(old, avoid, vars) if old in avoid else old
 
 class Simplifier(NodeTransformer):
-  def __init__(self, context=None, **kwargs):
+  def __init__(self, context=None, env=None, **kwargs):
     # TODO: introduce globals here? pare down based on free_vars in vist?
     self.context = {} if context is None else context
     self.context.update(kwargs)
+    self.env = env
     #logger.debug('SIMPLIFIER %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
 
   def visit(self, node):
@@ -77,7 +78,7 @@ class Simplifier(NodeTransformer):
     logger.debug('visiting %s %s %s', unparse(node), dump(node), get_type(node))
     #logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
     try:
-      evaled    = evast(node, self.context)
+      evaled    = evast(node, self.context, self.env)
       node.evaled = True
       if getattr(node, 'inlined', False) and evaled is not None and not isinstance(evaled, AST):
         raise TypeError(f'Unable to inline code {unparse(node)}')
@@ -97,8 +98,9 @@ class Simplifier(NodeTransformer):
 
 
   def visit_Call(self, node):
-    #logger.debug('CALL visiting Call %s\n%s', unparse(node), dump(node))
+    logger.warning('CALL visiting Call %s\n%s', unparse(node), dump(node))
     self.generic_visit(node)
+    logger.warning('AFTER generic visit %s\n%s', unparse(node), dump(node))
     try:
       _, out_type = get_type(node.func)
     except (ValueError, TypeError):
@@ -138,7 +140,7 @@ class Simplifier(NodeTransformer):
   def visit_Name(self, node):
     #print('NAME visiting Name', node.id, node.ctx)
     if node.id in self.context:
-      out = self.context[node.id]
+      out = self.context[node.id] #Need to visit here?
       try:
         return toast(out, get_type(node))
       except (SyntaxError, Exception) as e:
@@ -155,11 +157,21 @@ class Simplifier(NodeTransformer):
           for f in free_vars(value)
     }
 
+    logger.warning('LAMBDA: %s', unparse(node))
+    logger.warning('FREE IN BODY %s', free_in_body)
+    logger.warning('FREE IN REPLACEMENTS %s', free_in_replacements)
+    alpha_conversions = {}
     for arg in node.args.args:
       if arg.arg in free_in_replacements:
         new_param = new_var(arg.arg, free_in_body | free_in_replacements)
-        context[arg.arg] = Name(id=new_param, ctx=Load())
+        alpha_conversions[arg.arg] = Name(id=new_param, ctx=Load())
+        logger.warning('REPLACING %s with %s, ctx %s', arg.arg, new_param, alpha_conversions[arg.arg])
         arg.arg = new_param
+    logger.warning('CONVERSIONS %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in alpha_conversions.items()})
+    if alpha_conversions:
+      logger.warning('OLD LAMBDA %s', unparse(node))
+      Simplifier(alpha_conversions, {}).generic_visit(node)
+      logger.warning('NEW LAMBDA %s', unparse(node))
     return Simplifier(context).generic_visit(node)
 
   def visit_BinOp(self, node):
