@@ -76,6 +76,8 @@ ip_asts.append(ExprTransformer())
 class Predicate(set):
   """A set of tuples representing a predicate."""
   def __call__(self, *args):
+    if any(a is None for a in args):
+      return None
     if any(a not in DOMAIN for a in args):
       raise TypeError(f'Predicates only take individuals in the DOMAIN, got: {args}')
     return int(args in self) # converts True/False to 1/0

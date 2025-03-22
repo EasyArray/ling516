@@ -75,7 +75,7 @@ class Simplifier(NodeTransformer):
       return node
 
     logger.debug('visiting %s %s %s', unparse(node), dump(node), get_type(node))
-    logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
+    #logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
     try:
       evaled    = evast(node, self.context)
       node.evaled = True
@@ -85,7 +85,7 @@ class Simplifier(NodeTransformer):
       toasted.evaled = True
       logger.debug('Evaluated %s to %s (%s)', unparse(node), unparse(toasted), type(evaled))
       logger.debug('DUMP %s', dump(node))
-      logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
+      #logger.debug('CONTEXT %s', {k:(unparse(v) if isinstance(v,AST) else v) for k, v in self.context.items()})
       return toasted
     except (SyntaxError,Exception) as e:
       logger.debug('Error evaluating %s %s', unparse(node), dump(node))

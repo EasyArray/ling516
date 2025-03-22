@@ -57,8 +57,10 @@ def takes(f,x):
   if len(f_type) == 2:
     if f_type[0] == x_type:
       try:
-        return PV(f(x) is not None).eval()
+        test = PV(f(x) is not None) #TODO problem here inlining f
+        return test.eval()
       except Exception as e:
+        logger.debug(f'Error in takes: {e} {f}({x})')
         return True
   return False
 
@@ -105,6 +107,7 @@ class PV():
       setattr(self, field, value)
     fix_missing_locations(self)
     self.fields_filled = True
+    self.closure = closure
     repr(self)
 
   def copy(self):
