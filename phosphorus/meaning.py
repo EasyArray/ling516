@@ -126,7 +126,7 @@ class Meaning(dict):
           m.print(f'No rule found to combine {children}', level=logging.ERROR)
 
       m.indent = m.indent[:-len(m.indent_chars)]
-      m.print('=>', alpha, '=', value, f' type: {getattr(value, 'type', None)}\t({rule})')
+      m.print('=>', alpha, '=', value, f" type: {getattr(value, 'type', None)}\t({rule})")
       return value
     except Exception as e:
       #self.indent = ''
