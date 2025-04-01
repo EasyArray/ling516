@@ -179,9 +179,10 @@ class Simplifier(NodeTransformer):
     match node:
       case BinOp(op=BitOr(), left=Dict() as left, right=Dict() as right):
         combined = (
-            dict(zip(left.keys, left.values)) | dict(zip(right.keys, right.values))
+            dict(zip(map(lambda x: getattr(x,'value',x), left.keys), left.values))
+            | dict(zip(map(lambda x: getattr(x,'value',x), right.keys), right.values))
         )
-        return toast(Dict(keys=list(combined.keys()),
+        return toast(Dict(keys=list(map(lambda x: toast(x,code_string=False), combined.keys())),
                           values=list(combined.values())), get_type(node))
     return node
 
