@@ -104,7 +104,8 @@ class Meaning(dict):
     """Interprets the meaning of a natural language expression alpha."""
     try:
       m = self
-      m.print('Interpreting', alpha, 'with parameters:',
+      shortalpha = getattr(alpha, 'label', lambda:alpha)()
+      m.print('Interpreting', shortalpha, 'with parameters:',
               [(unparse(arg), getattr(arg, 'type', None)) 
                if isinstance(arg, AST) else arg for arg in args])
       m.indent += m.indent_chars
@@ -133,7 +134,7 @@ class Meaning(dict):
           m.print(f'No rule found to combine {children}', level=logging.ERROR)
 
       m.indent = m.indent[:-len(m.indent_chars)]
-      m.print('=>', alpha, '=', value, f" type: {getattr(value, 'type', None)}\t({rule})")
+      m.print('=>', shortalpha, '=', value, f" type: {getattr(value, 'type', None)}\t({rule})")
       return value
     except Exception as e:
       #self.indent = ''
