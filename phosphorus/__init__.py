@@ -91,7 +91,7 @@ DOMAIN = [PV(repr(c), type=Type.e) for c in ascii_uppercase]
 def charset(f, domain = None):
   if domain is None:
     domain = DOMAIN
-  return {c for c in domain if f(c)}
+  return {c for c in domain if PV(f(c))}
 
 def iota(f, domain = None):
   return tuple(charset(f,domain))[0]

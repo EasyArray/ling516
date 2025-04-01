@@ -126,6 +126,15 @@ class PV():
       return dump(self) == dump(other)
     return repr(self) == repr(other)
   
+  def __bool__(self):
+    return bool(self.eval())
+  
+  def __len__(self):
+    from . import charset
+    if isinstance(self, Lambda):
+      return len(charset(self))
+    raise ValueError(f'Cannot get length of {self}')
+
   def __repr__(self):
     return unparse(self)
     if not hasattr(self, 'repr'):
