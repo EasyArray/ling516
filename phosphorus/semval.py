@@ -142,7 +142,11 @@ class PV():
     return self.repr
 
   def _repr_html_(self):
-    return f"""{self}
+    from pygments import highlight
+    from pygments.lexers import PythonLexer
+    from pygments.formatters import HtmlFormatter
+    hl = highlight(repr(self), PythonLexer(), HtmlFormatter(noclasses=True, nowrap=True))
+    return f"""{hl}
         <span style='float:right; font-family:monospace; margin-right:75px;
               font-weight:bold; background-color:#e5e5ff; color:#000'>
           {self.type}</span>"""
