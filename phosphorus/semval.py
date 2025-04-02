@@ -111,7 +111,13 @@ class PV():
     repr(self)
 
   def copy(self):
-    return PV(unparse(self), type=self.type)
+    return PV(unparse(self), closure=self.closure, type=self.type)
+  
+  def __deepcopy__(self, memo):
+    obj = self.copy()
+    memo[id(self)] = obj
+    return obj
+
   
   def eval(self):
     return evast(self)

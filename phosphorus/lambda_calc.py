@@ -6,6 +6,7 @@ from ast import *
 from string import ascii_lowercase
 from inspect import signature
 from itertools import zip_longest
+from copy import deepcopy
 from IPython import get_ipython
 from .logs import logger
 
@@ -111,6 +112,7 @@ class Simplifier(NodeTransformer):
         params  = [arg.arg for arg in params]
         args    = [arg for arg in node.args]
         context = self.context | dict(zip(params, args))
+        body = deepcopy(body)
         return toast(Simplifier(context).visit(body), out_type)
 
       case _ if not hasattr(node, 'inlined'):
