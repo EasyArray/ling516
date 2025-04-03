@@ -174,7 +174,7 @@ class PV():
               color: #000;
               padding: 0.2em 0.4em;
               margin-left: 1em;
-              margin-top: 1em;
+              margin-top: 0.2em;
               margin-right: 1em;
               border-radius: 4px;
               white-space: nowrap;">
