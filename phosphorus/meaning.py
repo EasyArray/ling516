@@ -140,6 +140,8 @@ class Meaning(dict):
       #self.indent = ''
       m.print(f'!!! Error interpreting node {alpha}:', level=logging.ERROR)
       m.print(e, level=logging.ERROR)
+      #import traceback
+      #traceback.print_exc()
       self.indent = self.indent.removesuffix(self.indent_chars)
       raise e
 

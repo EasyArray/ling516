@@ -4,6 +4,7 @@ from ast import parse, unparse, fix_missing_locations, iter_fields, literal_eval
 from ast import Lambda, Call, Expression, Tuple, arguments, Name, Constant, IfExp, AST
 from functools import reduce
 from inspect import getclosurevars
+from copy import deepcopy
 import builtins
 from black import format_str, Mode
 from pygments import highlight
@@ -22,6 +23,7 @@ from .lambda_calc import VariableReplacer, Simplifier, free_vars, evast
 class TypeMeta(type):
   """Metaclass to handle Type.<type> expressions"""
   def __getattr__(cls,s):
+    #logger.warning(f'Converting {s} of {cls}')
     left_reduce = reduce(
         lambda l,x:  [cls((l[1],l[0]))] + l[2:] if x=='_' else  [cls(x)] + l,
         s, []
@@ -51,6 +53,12 @@ class Type(tuple,metaclass=TypeMeta):
     if len(self) == 1:
       return repr(self[0])  # remove parens from simple types
     return super().__repr__()
+  
+  def __deepcopy__(self, memo):
+    obj = Type(deepcopy(tuple(self)))
+    memo[id(self)] = obj
+    return obj
+               
 
 def takes(f,x):
   try:
@@ -157,16 +165,34 @@ class PV():
       highlighted = highlight(code_str, PythonLexer(), HtmlFormatter(noclasses=True))
 
       return f"""
-      <div style="position: relative; display: inline-block;">
-          <div style="position: absolute; top: 0; right: 0.5em;
-                      transform: translateY(1em);
-                      font-family: monospace; font-weight: bold;
-                      background-color: #e5e5ff; color: #000;">
+      <div style="display: flex; align-items: flex-start;">
+          <div style="flex-grow: 1;">{highlighted}</div>
+          <div style="
+              font-family: monospace;
+              font-weight: bold;
+              background-color: #e5e5ff;
+              color: #000;
+              padding: 0.2em 0.4em;
+              margin-left: 1em;
+              margin-top: 1em;
+              margin-right: 1em;
+              border-radius: 4px;
+              white-space: nowrap;">
               '{self.type}'
           </div>
-          <div style="padding-right: 4em;">{highlighted}</div>
       </div>
       """
+      # return f"""
+      # <div style="position: relative; display: inline-block;">
+      #     <div style="position: absolute; top: 0; right: 0.5em;
+      #                 transform: translateY(1em);
+      #                 font-family: monospace; font-weight: bold;
+      #                 background-color: #e5e5ff; color: #000;">
+      #         '{self.type}'
+      #     </div>
+      #     <div style="padding-right: 4em;">{highlighted}</div>
+      # </div>
+      # """
   def x_repr_html_(self):
       s = format_str(repr(self), mode=Mode())
       s = highlight(s, PythonLexer(), HtmlFormatter(noclasses=True, nowrap=True))
