@@ -5,6 +5,11 @@ from ast import Lambda, Call, Expression, Tuple, arguments, Name, Constant, IfEx
 from functools import reduce
 from inspect import getclosurevars
 import builtins
+from black import format_str, Mode
+from pygments import highlight
+from pygments.lexers import PythonLexer
+from pygments.formatters import HtmlFormatter
+
 from IPython import get_ipython
 
 from .logs import logger
@@ -148,14 +153,27 @@ class PV():
     return self.repr
 
   def _repr_html_(self):
-    from pygments import highlight
-    from pygments.lexers import PythonLexer
-    from pygments.formatters import HtmlFormatter
-    hl = highlight(repr(self), PythonLexer(), HtmlFormatter(noclasses=True, nowrap=True))
-    return f"""{hl}
-        <span style='float:right; font-family:monospace; margin-right:75px;
-              font-weight:bold; background-color:#e5e5ff; color:#000'>
-          {self.type}</span>"""
+      code_str = format_str(repr(self), mode=Mode())
+      highlighted = highlight(code_str, PythonLexer(), HtmlFormatter(noclasses=True))
+
+      return f"""
+      <div style="position: relative; display: inline-block;">
+          <div style="position: absolute; top: 0; right: 0.5em;
+                      transform: translateY(1em);
+                      font-family: monospace; font-weight: bold;
+                      background-color: #e5e5ff; color: #000;">
+              '{self.type}'
+          </div>
+          <div style="padding-right: 4em;">{highlighted}</div>
+      </div>
+      """
+  def x_repr_html_(self):
+      s = format_str(repr(self), mode=Mode())
+      s = highlight(s, PythonLexer(), HtmlFormatter(noclasses=True, nowrap=True))
+      return f"""{s}
+          <span style='float:right; font-family:monospace; margin-right:75px;
+                font-weight:bold; background-color:#e5e5ff; color:#000'>
+            {self.type}</span>"""
 
 class SemVal:
   """Represents a typed semantic value"""
