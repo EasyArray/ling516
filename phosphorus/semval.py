@@ -166,7 +166,7 @@ class PV():
 
       return f"""
       <div style="display: flex; align-items: flex-start;">
-          <div style="flex-grow: 1;">{highlighted}</div>
+          <div style="flex-grow: 1; color: #000;">{highlighted}</div>
           <div style="
               font-family: monospace;
               font-weight: bold;
