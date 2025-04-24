@@ -85,7 +85,10 @@ class PV():
       node = parse(node, mode='eval').body
 
     global_vars = {x: globals()[x] for x in free_vars(node) if x in globals()}
-    user_ns = get_ipython().user_ns
+    try:
+      user_ns = get_ipython().user_ns
+    except AttributeError:
+      user_ns = globals()
     global_vars |= {x: user_ns[x] for x in free_vars(node) if x in user_ns}
     node = Simplifier(global_vars | getclosurevars(closure).nonlocals).visit(node)
 

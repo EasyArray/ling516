@@ -67,11 +67,12 @@ class ExprTransformer(NodeTransformer):
     return out
 
 # Add the ExprTransformer to the IPython AST transformers
-ip_asts = get_ipython().ast_transformers
-while(ip_asts and type(ip_asts[-1]).__name__ == "ExprTransformer"):
-  del ip_asts[-1]
-ip_asts.append(ExprTransformer())
-
+try:
+  ip_asts = get_ipython().ast_transformers
+  while(ip_asts and type(ip_asts[-1]).__name__ == "ExprTransformer"):
+    del ip_asts[-1]
+  ip_asts.append(ExprTransformer())
+except: pass
 
 class Predicate(set):
   """A set of tuples representing a predicate."""
