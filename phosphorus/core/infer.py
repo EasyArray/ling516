@@ -114,7 +114,10 @@ class _Infer(ast.NodeTransformer):
     arg_t = getattr(node.args[0], "stype", None) if node.args else None
 
     if fn_t and fn_t.is_function:
-      if arg_t and arg_t != fn_t.domain:
+      dom = fn_t.domain
+      if arg_t and dom.is_unknown:
+        fn_t = stypes.Type((arg_t, fn_t.range))
+      elif arg_t and arg_t != dom:
         LOG.warning("Type mismatch: expected %s, got %s in %s", fn_t.domain, arg_t, ast.unparse(node))
       node.stype = fn_t.range
     return node
@@ -153,4 +156,3 @@ if __name__ == "__main__":
   assert infer_type(tree3) is stypes.e
 
   print("✅ infer_type attribute tests passed.")
-  

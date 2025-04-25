@@ -45,7 +45,7 @@ def render_phi_html(code: str | ast.AST, stype: object) -> str:
       f"font-family:var(--jp-code-font-family,monospace);"
       f"font-weight:bold; padding:0.15em 0.4em; margin-left:0.8em;"
       f"border-radius:4px; background-color:#c8c8ff; color:#000;'>"
-    f"{html.escape(repr(stype))}"
+    f"{html.escape(repr(None if stype.is_unknown else stype))}"
     f"</span>"
   )
 
@@ -66,7 +66,10 @@ def render_phi_html(code: str | ast.AST, stype: object) -> str:
       }}
     }}
     .pv-code, .pv-badge {{ display: table-cell; vertical-align: top; }}
-    .pv-code {{ padding-right: 1em; }}
+    .pv-code {{
+      padding-right: 1em;
+      min-width: 78ch;
+    }}
     .pv-badge {{ padding-left: 0.5em; }}
   </style>
   <div class="pv-wrapper">

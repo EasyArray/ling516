@@ -101,6 +101,10 @@ class Type(tuple, metaclass=_TypeMeta):
   @property
   def is_function(self) -> bool:
     return len(self) == 2
+  
+  @property
+  def is_unknown(self) -> bool:
+    return len(self) == 1 and self[0].startswith("?")
 
   # components ----------------------------------------------------
 
