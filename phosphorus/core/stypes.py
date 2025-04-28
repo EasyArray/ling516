@@ -69,7 +69,6 @@ class _TypeMeta(type):
 
     return reduce(fold, reversed(stack))
 
-
 # ---------------------------------------------------------------------------
 #  Type class with *constructor‑level* interning
 # ---------------------------------------------------------------------------
@@ -91,6 +90,32 @@ class Type(tuple, metaclass=_TypeMeta):
     obj = tuple.__new__(cls, tpl)
     cls._intern_cache[tpl] = obj
     return obj
+
+  @classmethod
+  def from_spec(cls, spec: str | tuple) -> "Type":  # type: ignore[valid-type]
+    """Build a semantic Type from a string or nested tuple spec.
+
+    Examples:
+      'et'         -> Type.et
+      ('e','t')    -> Type((Type.e,Type.t))
+      ('et','et_t')-> Type((Type.et, Type.et_t))
+    """
+    match spec:
+      case str() as s:
+        # simple suffix
+        return cls._build_from_suffix(s)
+
+      case tuple() as tup:
+        # nested tuple: build each element then fold right-associatively
+        parts = [cls.from_spec(elem) for elem in tup]
+
+        # fold remaining stack right-associatively
+        def fold(acc: "Type", nxt: "Type") -> "Type":  # type: ignore[valid-type]
+          return cls((nxt, acc))
+        return reduce(fold, reversed(parts))
+
+      case _:
+        raise TypeError(f"Invalid spec type: {spec!r}")
 
   # predicates ----------------------------------------------------
 
@@ -177,7 +202,38 @@ def _run_tests() -> None:
   # nested underscores
   assert repr(Type.eet__et__et) == "(((e→(e→t))→(e→t))→(e→t))"
 
-  print("✅  All type‑system tests passed.")
+  # -------------------------------------------------------------------
+  # Tests for from_spec
+  # -------------------------------------------------------------------
+
+  # Nested function type
+  assert Type.from_spec("eet") is Type.eet
+  assert repr(Type.from_spec("eet")) == "(e→(e→t))"
+
+  # Tuple-based specification
+  assert Type.from_spec(("e", "t")) is Type.et
+  assert repr(Type.from_spec(("e", "et"))) == "(e→(e→t))"
+
+  # Deeply nested tuple specification
+  assert repr(Type.from_spec((("e", "t"), "et"))) == "((e→t)→(e→t))"
+
+  # Invalid specifications
+  try:
+    Type.from_spec("invalid")
+  except AttributeError as er:
+    assert str(er) == "invalid type suffix 'invalid'"
+
+  try:
+    Type.from_spec(("e", "invalid"))
+  except AttributeError as er:
+    assert str(er) == "invalid type suffix 'invalid'"
+
+  try:
+    Type.from_spec(123)
+  except TypeError as er:
+    assert str(er) == "Invalid spec type: 123"
+
+  print("✅  All type‑system tests passed, including from_spec tests.")
 
 
 if __name__ == "__main__":

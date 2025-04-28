@@ -16,6 +16,7 @@ from phosphorus.simplify           import simplify          # local functional A
 from phosphorus.simplify.utils     import capture_env       # caller env snapshot
 from phosphorus.core.display       import render_phi_html   # rich HTML helper
 from phosphorus.core.infer         import infer_type        # type checker / DSL stripper
+from phosphorus.core.stypes        import Type                # semantic type system
 
 # ---------------------------------------------------------------------------
 #  PhiValue
@@ -24,17 +25,17 @@ from phosphorus.core.infer         import infer_type        # type checker / DSL
 class PhiValue:
   """An AST + optional semantic type with Jupyter‑friendly HTML."""
 
-  __slots__ = ("expr", "stype", "_env")
+  __slots__ = ("expr", "stype", "guard", "_env")
 
   # ---------------------------------------------------------------------
   #  construction
   # ---------------------------------------------------------------------
 
-  def __init__(self, expr: ast.AST, *, stype: Optional[Any] = None):
+  def __init__(self, expr: ast.AST, *, stype: Optional[Type] = None, guard: Optional[ast.AST] = None) -> None:
     # 1. capture *caller* environment (skip this frame)
     env = capture_env(skip=1)          # ChainMap
 
-    # 2. *Infer* type while DSL cues are still present
+    # 2. *Infer* type while DSL cues are still present (also strips DSL cues)
     inferred = infer_type(expr, env)
 
     # 3. beta‑reduce / macro‑expand (pure)
@@ -43,7 +44,8 @@ class PhiValue:
     # 4. store
     self.expr  = simplified
     self._env  = ChainMap({}, env)     # make a shallow, isolated view
-    self.stype = stype if stype is not None else inferred
+    self.stype = stype or getattr(expr, 'stype', None)
+    self.guard = guard or getattr(expr, 'guard', None)
 
   # ---------------------------------------------------------------------
   #  functional behaviour
@@ -97,7 +99,7 @@ class PhiValue:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-  id_ast = ast.parse("lambda x: x", mode="eval").body
+  id_ast = ast.parse("lambda x=t: x[t]", mode="eval").body
   id_pv = PhiValue(id_ast)
   two_pv = PhiValue(ast.parse("2", mode="eval").body)
 
