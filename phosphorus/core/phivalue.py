@@ -1,12 +1,11 @@
 """phosphorus.core.phivalue
 ---------------------------------
 Light‑weight wrapper around a Python AST that stores an optional
-semantic type and beta‑reduces the AST at construction time.
+semantic type and guard/presupposition and beta‑reduces the AST
+at construction time.
 
 All heavy work (pretty HTML, richer type inference) lives elsewhere.
 """
-
-from __future__ import annotations
 
 import ast
 from collections import ChainMap
@@ -16,14 +15,14 @@ from phosphorus.simplify           import simplify          # local functional A
 from phosphorus.simplify.utils     import capture_env       # caller env snapshot
 from phosphorus.core.display       import render_phi_html   # rich HTML helper
 from phosphorus.core.infer         import infer_type        # type checker / DSL stripper
-from phosphorus.core.stypes        import Type                # semantic type system
+from phosphorus.core.stypes        import Type              # semantic type system
 
 # ---------------------------------------------------------------------------
 #  PhiValue
 # ---------------------------------------------------------------------------
 
 class PhiValue:
-  """An AST + optional semantic type with Jupyter‑friendly HTML."""
+  """An AST + optional semantic type and guard with Jupyter‑friendly HTML."""
 
   __slots__ = ("expr", "stype", "guard", "_env")
 
@@ -31,12 +30,15 @@ class PhiValue:
   #  construction
   # ---------------------------------------------------------------------
 
-  def __init__(self, expr: ast.AST, *, stype: Optional[Type] = None, guard: Optional[ast.AST] = None) -> None:
+  def __init__(self,
+               expr: ast.AST, *,
+               stype: Optional[Type] = None,
+               guard: Optional[ast.AST] = None) -> None:
     # 1. capture *caller* environment (skip this frame)
     env = capture_env(skip=1)          # ChainMap
 
     # 2. *Infer* type while DSL cues are still present (also strips DSL cues)
-    inferred = infer_type(expr, env)
+    inferred_type, inferred_guard = infer_type(expr, env)
 
     # 3. beta‑reduce / macro‑expand (pure)
     simplified = simplify(expr, env=env)
@@ -44,8 +46,8 @@ class PhiValue:
     # 4. store
     self.expr  = simplified
     self._env  = ChainMap({}, env)     # make a shallow, isolated view
-    self.stype = stype or getattr(expr, 'stype', None)
-    self.guard = guard or getattr(expr, 'guard', None)
+    self.stype = stype or inferred_type
+    self.guard = guard or inferred_guard
 
   # ---------------------------------------------------------------------
   #  functional behaviour
@@ -65,8 +67,6 @@ class PhiValue:
     """Evaluate the stored expression in its captured environment."""
     # Python's eval requires a real dict for globals
     env_dict = dict(self._env)
-    # ensure builtins are available
-    env_dict.setdefault('__builtins__', __builtins__)
     code = compile(ast.Expression(self.expr), filename="<phivalue>", mode="eval")
     return eval(code, env_dict)
 
@@ -78,12 +78,16 @@ class PhiValue:
     return bool(self.eval())
 
   def __hash__(self):
-    return hash((ast.dump(self.expr, annotate_fields=False), self.stype))
+    return hash((ast.dump(self.expr, annotate_fields=False), self.stype, 
+                 ast.dump(self.guard, annotate_fields=False)))
 
   def __eq__(self, other):
     if isinstance(other, PhiValue):
-      return (ast.dump(self.expr, annotate_fields=False) ==
-              ast.dump(other.expr, annotate_fields=False)) and self.stype == other.stype
+      return (  (ast.dump(self.expr, annotate_fields=False) ==
+                ast.dump(other.expr, annotate_fields=False)) and 
+                self.stype == other.stype and
+                (ast.dump(self.guard, annotate_fields=False) ==
+                 ast.dump(other.guard, annotate_fields=False)))
     return NotImplemented
 
   def __repr__(self):
@@ -92,7 +96,7 @@ class PhiValue:
   # Jupyter rich repr
   def _repr_html_(self):
     #return f"<code>{ast.unparse(self.expr)}</code>  <small>{self.stype}</small>"
-    return render_phi_html(self.expr, stype=self.stype)
+    return render_phi_html(self.expr, stype=self.stype, guard=self.guard)
 
 # ---------------------------------------------------------------------------
 #  rudimentary tests

@@ -10,7 +10,7 @@ from pygments.lexers.python import PythonLexer
 from pygments.formatters import HtmlFormatter
 
 
-def render_phi_html(code: str | ast.AST, stype: object) -> str:
+def render_phi_html(code: str | ast.AST, stype: object, guard: str | ast.AST) -> str:
   """
   Given a code string (or AST) and semantic type, produce a self-contained HTML
   snippet that preserves Black's line breaks, applies syntax highlighting,
@@ -21,6 +21,8 @@ def render_phi_html(code: str | ast.AST, stype: object) -> str:
   # 0) Unparse if an AST was passed
   if isinstance(code, ast.AST):
     code = ast.unparse(code)
+  if isinstance(guard, ast.AST):
+    guard = ast.unparse(guard)
 
   # 1) Auto-format code using Black
   pretty = format_str(code, mode=Mode())
@@ -45,8 +47,9 @@ def render_phi_html(code: str | ast.AST, stype: object) -> str:
       f"font-family:var(--jp-code-font-family,monospace);"
       f"font-weight:bold; padding:0.15em 0.4em; margin-left:0.8em;"
       f"border-radius:4px; background-color:#c8c8ff; color:#000;'>"
-    f"{html.escape(repr(None if stype.is_unknown else stype))}"
-    f"</span>"
+    f"{html.escape(repr(None if stype.is_unknown else stype))}" + 
+    (f" | {html.escape(str(guard))}" if guard else '') +
+    "</span>"
   )
 
   # 5) Return wrapper with table layout for alignment and theme support
