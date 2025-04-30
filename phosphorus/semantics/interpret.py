@@ -65,7 +65,10 @@ class Interpreter:
     return self.lexicon.get(word.lower(), VACUOUS)
 
   def add_rule(self, fn: Callable, *, index: int | None = None) -> None:
-    (self.rules.append if index is None else self.rules.insert)(index or 0, fn)
+    if index is None:
+      self.rules.append(fn)
+    else: 
+      self.rules.insert(index or 0, fn)
 
   def rule(self, fn: Callable | None = None, *, index: int | None = None):
     """Decorator: ``@interp.rule`` registers *fn* as a rule."""
