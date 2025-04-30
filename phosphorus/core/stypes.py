@@ -168,8 +168,8 @@ et = Type.et
 
 def takes(func: Any, arg: Any) -> bool:
   """Return ``True`` iff *func* has type ⟨A,B⟩ and *arg* has type A."""
-  ft = getattr(func, "type", None)
-  at = getattr(arg, "type", None)
+  ft = getattr(func, "stype", None)
+  at = getattr(arg, "stype", None)
   return bool(ft and ft.is_function and ft.domain == at)
 
 

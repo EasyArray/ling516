@@ -20,7 +20,7 @@ class SimplifyPass(NodeTransformer):
 # ─────────────────────────────
 class NameInliner(SimplifyPass):
   """
-  Inline identifiers whose run‑time value is a simple literal.
+  Inline identifiers whose run‑time value is a simple literal or has an .expr AST.
   """
   TEST_ENV = {"x":1}
   TESTS = [
@@ -32,6 +32,9 @@ class NameInliner(SimplifyPass):
       val = self.env[node.id]
       if is_literal(val):
         return parse(repr(val), mode="eval").body
+      # Inline any object with an .expr attribute that is an AST node
+      if hasattr(val, "expr") and isinstance(val.expr, ast.AST):
+        return val.expr
     return node
 
 
