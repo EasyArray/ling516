@@ -42,12 +42,14 @@ def render_phi_html(code: str | ast.AST, stype: object, guard: str | ast.AST) ->
   )
 
   # 4) Prepare the type badge
+  if stype and stype.is_unknown:
+    stype = None
   badge = (
     f"<span style='display:inline-block;"
       f"font-family:var(--jp-code-font-family,monospace);"
       f"font-weight:bold; padding:0.15em 0.4em; margin-left:0.8em;"
       f"border-radius:4px; background-color:#c8c8ff; color:#000;'>"
-    f"{html.escape(repr(None if stype.is_unknown else stype))}" + 
+    f"{html.escape(repr(stype))}" + 
     (f" | {html.escape(str(guard))}" if guard else '') +
     "</span>"
   )

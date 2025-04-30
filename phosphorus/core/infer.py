@@ -84,6 +84,7 @@ class _Infer(ast.NodeTransformer):
       # Attach guard if provided
       if guard is not None:
         node.value.guard = guard
+      # Strip the DSL cue: return the base expression with .stype
       return node.value
 
     # fallback for non‑DSL subscripts
@@ -157,10 +158,9 @@ class _Infer(ast.NodeTransformer):
 #  public helper
 # ---------------------------------------------------------------------------
 
-def infer_type(node: ast.AST, env: Mapping[str, Any] | None = None):
-  """Annotate *node* with ``.stype`` and ``.guard`` and return them (may be ``None``)."""
-  node = _Infer(env or {}).visit(node)
-  return getattr(node, "stype", None), getattr(node, "guard", None)
+def infer_and_strip(node: ast.AST, env: Mapping[str, Any] | None = None) -> ast.AST:
+  """Annotate *node* with ``.stype`` and ``.guard``, strip DSL cues, and return the (possibly replaced) node."""
+  return _Infer(env or {}).visit(node)
 
 
 # ---------------------------------------------------------------------------
@@ -172,44 +172,45 @@ if __name__ == "__main__":
 
   src1 = "(lambda x=Type.e: FLUFFY(x).t)(A)"
   tree1 = _ast.parse(src1, mode="eval").body
-  type1, _ = infer_type(tree1)
-  assert type1 is Type.t
+  node1 = infer_and_strip(tree1)
+  assert getattr(node1, "stype", None) is Type.t
 
   src3 = "(lambda x=Type.e: x)(A)"
   tree3 = _ast.parse(src3, mode="eval").body
-  type3, _ = infer_type(tree3)
-  assert type3 is Type.e
+  node3 = infer_and_strip(tree3)
+  assert getattr(node3, "stype", None) is Type.e
 
   src4 = "x[e]"
   tree4 = _ast.parse(src4, mode="eval").body
-  type4, _ = infer_type(tree4, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
-  assert type4 is Type.e
+  node4 = infer_and_strip(tree4, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
+  assert getattr(node4, "stype", None) is Type.e
+  assert isinstance(node4, ast.Name)
 
   src5 = "x[e:guard]"
   tree5 = _ast.parse(src5, mode="eval").body
-  type5, guard5 = infer_type(tree5, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
-  assert type5 is Type.e
-  assert guard5 is not None
+  node5 = infer_and_strip(tree5, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
+  assert getattr(node5, "stype", None) is Type.e
+  assert getattr(node5, "guard", None) is not None
 
   src6 = "x[(et, et_t)]"
   tree6 = _ast.parse(src6, mode="eval").body
-  type6, _ = infer_type(tree6, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
-  assert type6 == Type((Type.et, Type.et_t))
+  node6 = infer_and_strip(tree6, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
+  assert getattr(node6, "stype", None) == Type((Type.et, Type.et_t))
 
   src7 = "x[(et, et_t):guard]"
   tree7 = _ast.parse(src7, mode="eval").body
-  type7, guard7 = infer_type(tree7, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
-  assert type7 == Type((Type.et, Type.et_t))
-  assert guard7 is not None
+  node7 = infer_and_strip(tree7, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
+  assert getattr(node7, "stype", None) == Type((Type.et, Type.et_t))
+  assert getattr(node7, "guard", None) is not None
 
   src8 = "x[e:e2:e3]"
   tree8 = _ast.parse(src8, mode="eval").body
-  type8, _ = infer_type(tree8, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
-  assert type8 is Type.e  # "step" (e3) is ignored
+  node8 = infer_and_strip(tree8, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
+  assert getattr(node8, "stype", None) is Type.e  # "step" (e3) is ignored
 
   src9 = "(lambda x=Type.e: FLUFFY(x)[t])(A)"
   tree9 = _ast.parse(src1, mode="eval").body
-  type9, _ = infer_type(tree1)
-  assert type9 is Type.t
+  node9 = infer_and_strip(tree1)
+  assert getattr(node9, "stype", None) is Type.t
 
   print("✅ Extended subscript and lambda tests passed.")

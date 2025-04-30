@@ -14,7 +14,7 @@ from typing import Any, Optional
 from phosphorus.simplify           import simplify          # local functional API
 from phosphorus.simplify.utils     import capture_env       # caller env snapshot
 from phosphorus.core.display       import render_phi_html   # rich HTML helper
-from phosphorus.core.infer         import infer_type        # type checker / DSL stripper
+from phosphorus.core.infer         import infer_and_strip   # type checker / DSL stripper
 from phosphorus.core.stypes        import Type              # semantic type system
 
 # ---------------------------------------------------------------------------
@@ -31,14 +31,20 @@ class PhiValue:
   # ---------------------------------------------------------------------
 
   def __init__(self,
-               expr: ast.AST, *,
+               expr: ast.AST | str, *,
                stype: Optional[Type] = None,
                guard: Optional[ast.AST] = None) -> None:
+    # 0: parse or accept AST
+    if isinstance(expr, str):
+      expr = ast.parse(expr, mode="eval").body
+
     # 1. capture *caller* environment (skip this frame)
     env = capture_env(skip=1)          # ChainMap
 
     # 2. *Infer* type while DSL cues are still present (also strips DSL cues)
-    inferred_type, inferred_guard = infer_type(expr, env)
+    expr = infer_and_strip(expr, env)
+    inferred_type = getattr(expr, "stype", None)
+    inferred_guard = getattr(expr, "guard", None)
 
     # 3. beta‑reduce / macro‑expand (pure)
     simplified = simplify(expr, env=env)
