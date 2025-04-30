@@ -48,12 +48,13 @@ class PhiValue:
 
     # 3. beta‑reduce / macro‑expand (pure)
     simplified = simplify(expr, env=env)
+    simplified_guard = simplify(guard or inferred_guard, env=env)
 
     # 4. store
     self.expr  = simplified
     self._env  = ChainMap({}, env)     # make a shallow, isolated view
     self.stype = stype or inferred_type
-    self.guard = guard or inferred_guard
+    self.guard = simplified_guard
 
   # ---------------------------------------------------------------------
   #  functional behaviour

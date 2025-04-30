@@ -42,7 +42,7 @@ def _slice_to_spec(slice_node: ast.AST) -> tuple:
 # ---------------------------------------------------------------------------
 
 class _Infer(ast.NodeTransformer):
-  """Annotates expression nodes with ``.stype``; strips DSL cues."""
+  """Annotate nodes with .stype and .guard; strip DSL cues."""
 
   def __init__(self, env: Mapping[str, Any]):
     self.env: ChainMap[str, Any] = ChainMap({}, *([env] if env else []))
@@ -55,84 +55,81 @@ class _Infer(ast.NodeTransformer):
     val = self.env.get(node.id)
     if hasattr(val, "stype"):
       node.stype = val.stype
+    if hasattr(val, "guard"):
+      node.guard = val.guard
     return node
 
   def visit_Attribute(self, node: ast.Attribute):
     t = Type.from_spec(node.attr)
     if t is not None:
       node.value.stype = t
-      return self.visit(node.value)  # strip attribute
+      return self.visit(node.value)          # strip .Type attribute
     node.value = self.visit(node.value)
     return node
 
-  def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
-    """Support DSL: expr[type] and expr[type:guard] annotations."""
-    # Recurse into the base expression
-    node.value = self.visit(node.value)
+  # -------------------------------------------------------------------
+  #  DSL subscript [type]  or [type:guard]
+  # -------------------------------------------------------------------
 
-    # Parse the slice into a spec (type_spec, optional_guard)
+  def visit_Subscript(self, node: ast.Subscript):
+    node.value = self.visit(node.value)
     type_spec, guard = _slice_to_spec(node.slice)
+
     if type_spec is not None:
-      # Build and assign the type, warning on invalid specs
       try:
-        t = Type.from_spec(type_spec)
-        node.value.stype = t
+        node.value.stype = Type.from_spec(type_spec)
       except Exception as e:
         LOG.warning("Invalid type spec %r: %s", type_spec, e)
         return node.value
-
-      # Attach guard if provided
       if guard is not None:
         node.value.guard = guard
-      # Strip the DSL cue: return the base expression with .stype
-      return node.value
-
-    # fallback for non‑DSL subscripts
+      return node.value                     # strip DSL cue
     return super().generic_visit(node)
 
   # -------------------------------------------------------------------
-  #  lambda
+  #  lambda  — add guard(lambda-expressed)
   # -------------------------------------------------------------------
 
   def visit_Lambda(self, node: ast.Lambda):
-    rev_defaults = list(node.args.defaults)[::-1]
-    param_defaults = {
-      arg.arg: rev_defaults[i] if i < len(rev_defaults) else None
-      for i, arg in enumerate(node.args.args[::-1])
-    }
-
-    param_types: list[Type] = []
-    for arg in node.args.args:
-      dflt = param_defaults[arg.arg]
-      if (
-        isinstance(dflt, ast.Attribute)
-        and isinstance(dflt.value, ast.Name)
-        and dflt.value.id == "Type"
-      ):
-        t = Type.from_spec(dflt.attr) or Type.fresh()
+    # 1. infer parameter types from default annotations
+    rev_defaults = node.args.defaults[::-1]
+    param_types = []
+    for i, arg in enumerate(node.args.args[::-1]):
+      dflt = rev_defaults[i] if i < len(rev_defaults) else None
+      if isinstance(dflt, ast.Attribute) and isinstance(dflt.value, ast.Name) and dflt.value.id == "Type":
+        param_types.append(Type.from_spec(dflt.attr) or Type.fresh())
       elif isinstance(dflt, ast.Name):
-        t = Type.from_spec(dflt.id) or Type.fresh()
+        param_types.append(Type.from_spec(dflt.id) or Type.fresh())
       else:
-        t = Type.fresh()
-      param_types.append(t)
+        param_types.append(Type.fresh())
+    param_types.reverse()
     node.args.defaults = []
 
+    # 2. recurse on body with params in env
     inner_env = {
-      p.arg: type("_TypeHolder", (object,), {"stype": t})()
-      for p, t in zip(node.args.args, param_types)
+      p.arg: type("_T", (), {"stype": t})() for p, t in zip(node.args.args, param_types)
     }
     body_node = self.__class__(self.env.new_child(inner_env)).visit(node.body)
     node.body = body_node
-    body_t = getattr(body_node, "stype", Type.fresh())
 
+    # 3. function type:  param_types → body_t
+    body_t = getattr(body_node, "stype", Type.fresh())
     fn_t = body_t
     for dom in reversed(param_types):
       fn_t = Type((dom, fn_t))
     node.stype = fn_t
+
+    # 4. propagate guard: λx. BODY  →  guard := λx. BODY.guard
+    body_guard = getattr(body_node, "guard", None)
+    if body_guard is not None:
+      node.guard = ast.Lambda(
+        args=node.args, body=body_guard,
+      )
+
     return node
 
   # -------------------------------------------------------------------
-  #  calls
+  #  calls  — compose guards
   # -------------------------------------------------------------------
 
   def visit_Call(self, node: ast.Call):
@@ -140,18 +137,37 @@ class _Infer(ast.NodeTransformer):
     if node.args:
       node.args[0] = self.visit(node.args[0])
 
+    # ---------- type inference (unchanged) ----------------------------
     fn_t = getattr(node.func, "stype", None)
     arg_t = getattr(node.args[0], "stype", None) if node.args else None
-
     if fn_t and fn_t.is_function:
       dom = fn_t.domain
       if arg_t and dom.is_unknown:
         fn_t = Type((arg_t, fn_t.range))
       elif arg_t and arg_t != dom:
-        LOG.warning("Type mismatch: expected %s, got %s in %s", fn_t.domain, arg_t, ast.unparse(node))
+        LOG.warning("Type mismatch: expected %s, got %s in %s",
+                    fn_t.domain, arg_t, ast.unparse(node))
       node.stype = fn_t.range
-    return node
 
+    # ---------- guard propagation ------------------------------------
+    fn_guard  = getattr(node.func, "guard", None)
+    arg_guard = getattr(node.args[0], "guard", None) if node.args else None
+    guards = []
+
+    # apply function guard to argument
+    if fn_guard is not None and node.args:
+      guards.append(
+        ast.Call(func=fn_guard, args=[node.args[0]], keywords=[])
+      )
+
+    if arg_guard is not None:
+      guards.append(arg_guard)
+
+    if guards:
+      node.guard = guards[0] if len(guards) == 1 else \
+        ast.BoolOp(ast.And(), guards)
+
+    return node
 
 
 # ---------------------------------------------------------------------------
@@ -208,9 +224,10 @@ if __name__ == "__main__":
   node8 = infer_and_strip(tree8, {"x": type("_TypeHolder", (object,), {"stype": Type.fresh()})()})
   assert getattr(node8, "stype", None) is Type.e  # "step" (e3) is ignored
 
-  src9 = "(lambda x=Type.e: FLUFFY(x)[t])(A)"
-  tree9 = _ast.parse(src1, mode="eval").body
-  node9 = infer_and_strip(tree1)
+  src9 = "(lambda x=Type.e: BARKS(x)[t:ANIMAL(x)])(A)"
+  tree9 = _ast.parse(src9, mode="eval").body
+  node9 = infer_and_strip(tree9)
   assert getattr(node9, "stype", None) is Type.t
+  print(ast.unparse(node9.guard))
 
   print("✅ Extended subscript and lambda tests passed.")
