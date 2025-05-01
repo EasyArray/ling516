@@ -16,6 +16,7 @@ from phosphorus.simplify.utils     import capture_env       # caller env snapsho
 from phosphorus.core.display       import render_phi_html   # rich HTML helper
 from phosphorus.core.infer         import infer_and_strip   # type checker / DSL stripper
 from phosphorus.core.stypes        import Type              # semantic type system
+from phosphorus.core.constants     import UNDEF             # sentinel for undefined values
 
 # ---------------------------------------------------------------------------
 #  PhiValue
@@ -98,7 +99,6 @@ class PhiValue:
     return NotImplemented
 
   def __mod__(self, guard):
-    from phosphorus.semantics.interpret import UNDEF  # sentinel for undefined
     if not guard:
       return UNDEF
     return self

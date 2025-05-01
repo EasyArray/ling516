@@ -33,18 +33,13 @@ from typing import Any, Callable, Mapping
 
 from phosphorus.syntax.tree import Tree
 from phosphorus.core.phivalue import PhiValue
+from phosphorus.core.constants import UNDEF, VACUOUS
+
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-# ——————————————————————————————————————————————
-# Sentinels
-# ——————————————————————————————————————————————
-
-VACUOUS: Any = object()
-UNDEF: Any = object()
-
-__all__ = ["VACUOUS", "UNDEF", "Interpreter", "defined"]
+__all__ = ["Interpreter", "defined"]
 
 # ——————————————————————————————————————————————
 # Helpers

@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import ast
 
+from phosphorus.core.constants import UNDEF   # sentinel for undefined values
 from .passes import SimplifyPass   # base class provides .env (ChainMap)
 
 # sentinel name for undefined
-UNDEF_NAME = "UNDEF"
+UNDEF_NAME = str(UNDEF)
 
 # ---------------------------------------------------------------------------
 # GuardFolder pass
