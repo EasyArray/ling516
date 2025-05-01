@@ -39,6 +39,9 @@ class Tree(_NLTKTree):
     """
 
     __slots__ = ("sem",)
+    __match_args__ = ("_label", "children")
+    @property
+    def children(self): return list(self)
 
     def __init__(self, label, children=(), *, sem: PhiValue | None = None):
         # Initialize as an nltk.Tree with given label and children

@@ -73,6 +73,7 @@ def render_phi_html(code: str | ast.AST, stype: object, guard: str | ast.AST) ->
     .pv-code, .pv-badge {{ display: table-cell; vertical-align: top; }}
     .pv-code {{
       padding-right: 1em;
+      text-align: left;
       min-width: 45ch;
     }}
     .pv-badge {{ padding-left: 0.5em; }}
