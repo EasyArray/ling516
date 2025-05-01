@@ -8,6 +8,7 @@ All heavy work (pretty HTML, richer type inference) lives elsewhere.
 """
 
 import ast
+import copy
 from collections import ChainMap
 from typing import Any, Optional
 
@@ -62,10 +63,16 @@ class PhiValue:
   # ---------------------------------------------------------------------
 
   def __call__(self, *args: "PhiValue") -> "PhiValue":
-    call_ast = ast.Call(func=self.expr,
-                        args=[a.expr for a in args],
-                        keywords=[])
-    return PhiValue(call_ast)  # stype inferred inside constructor
+    call_ast = ast.Call(
+      func=copy.deepcopy(self.expr),
+      args=[copy.deepcopy(a.expr) for a in args],
+      keywords=[]
+    )
+    phi = PhiValue(call_ast)
+    try:
+      return phi.eval()
+    except:
+      return phi
 
   # ---------------------------------------------------------------------
   #  evaluation helpers
@@ -91,12 +98,26 @@ class PhiValue:
 
   def __eq__(self, other):
     if isinstance(other, PhiValue):
-      return (  (ast.dump(self.expr, annotate_fields=False) ==
-                ast.dump(other.expr, annotate_fields=False)) and 
-                self.stype == other.stype and
-                (ast.dump(self.guard, annotate_fields=False) ==
-                 ast.dump(other.guard, annotate_fields=False)))
-    return NotImplemented
+      if (ast.dump(self.expr, annotate_fields=False) !=
+          ast.dump(other.expr, annotate_fields=False)):
+        return False
+
+      if self.stype != other.stype:
+        return False
+
+      if self.guard == other.guard == None:
+        return True
+
+      if self.guard is None or other.guard is None:
+        return False
+
+      return (ast.dump(self.guard, annotate_fields=False) ==
+                 ast.dump(other.guard, annotate_fields=False))
+    
+    try:
+      return self.eval() == other
+    except:
+      return NotImplemented
 
   def __mod__(self, guard):
     if not guard:
