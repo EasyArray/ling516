@@ -9,6 +9,8 @@ class _Sentinel:
     return f"<{self.name}>"
   def __str__(self):
     return self.name
+  def _repr_html_(self):
+    return f"<code>&lt;{self.name}&gt;</code>"
 
 UNDEF = _Sentinel("UNDEF")
 VACUOUS = _Sentinel("VACUOUS")

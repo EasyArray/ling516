@@ -12,6 +12,8 @@ Rules
   boolean constant, fold as above (Option 1: cheap eval).
 * ``(φ % ψ) is not UNDEF``  →  ``ψ``
 * ``defined(φ % ψ)``        →  ``ψ``
+* ``defined(...)``    →  ``True`` otherwise
+* ``(fn % G)(arg)`` →  ``(fn)(arg) % G``
 
 This pass should run *after* macro‑expansion and beta‑reduction, and
 before any static checks of undefinedness.
@@ -20,6 +22,7 @@ before any static checks of undefinedness.
 from __future__ import annotations
 
 import ast
+from collections import deque
 
 from phosphorus.core.constants import UNDEF   # sentinel for undefined values
 from .passes import SimplifyPass   # base class provides .env (ChainMap)
@@ -39,6 +42,7 @@ class GuardFolder(SimplifyPass):
     ("phi % True",           "phi"),
     ("defined(phi % psi)",   "psi"),
     ("(phi % psi) is not UNDEF", "psi"),
+    ("defined(lambda x: x)", "True"),  # New test for defined(lambda...)
   ]
 
   TEST_ENV = {
@@ -103,4 +107,76 @@ class GuardFolder(SimplifyPass):
         keywords=[],
       ):
         return rhs
+      
+      # defined(foo) → True if foo is not a BinOp %
+      # in the future may want to try to eval first
+      case ast.Call(
+        func=ast.Name(id="defined", ctx=ast.Load()),
+#        args=[ast.Lambda()],
+#        keywords=[],
+      ):
+        return ast.Constant(value=True)
+      
+      case ast.Call(
+        func=ast.BinOp(left=lhs, op=ast.Mod(), right=rhs)
+      ):
+        node.func = lhs
+        return ast.BinOp(left=node, op=ast.Mod(), right=rhs)
+        
     return node
+
+
+# ---------------------------------------------------------------------------
+# Remove Duplicate Guard Pass
+# ---------------------------------------------------------------------------
+
+def guard_key(node: ast.AST) -> str:
+  """
+  Return a hashable, location-independent representation of *node*.
+
+  We rely on ast.dump(), suppressing lineno/col_offset etc.,
+  which is deterministic from 3.8 onward.
+  """
+  return ast.dump(node, annotate_fields=True, include_attributes=False)
+
+class RemoveDuplicateGuards(SimplifyPass):
+  """
+  Delete inner occurrences of “… % guard” when *guard* is
+  structurally identical to one already in force.
+
+    (A % G) % G        → A % G
+    (A % G1 % G2) % G1 → A % G1 % G2
+  """
+
+  # we keep a stack of *keys* for the guards that dominate the
+  # current traversal position
+  def __init__(self, env=None):
+    super().__init__(env)
+    self._active: deque[str] = deque()
+
+  # ---------- helper ------------------------------------------------
+  def _is_redundant(self, guard: ast.AST) -> bool:
+    return guard_key(guard) in self._active
+
+  # ---------- core visitor ------------------------------------------
+  def visit_BinOp(self, node: ast.BinOp):
+    # only interested in `%`
+    match node:
+      case ast.BinOp(op=ast.Mod()):
+        # (1) First simplify the *guard* expression on the right
+        node.right = self.visit(node.right)
+
+        # (2) Check redundancy
+        key = guard_key(node.right)
+        if key in self._active:
+          # drop the whole “… % guard”
+          return self.visit(node.left)
+
+        # (3) Keep it and recurse into the left with guard active
+        self._active.append(key)
+        node.left = self.visit(node.left)
+        self._active.pop()
+        return node
+
+      case _:
+        return self.generic_visit(node)

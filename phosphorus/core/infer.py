@@ -12,7 +12,7 @@ from __future__ import annotations
 import ast
 import logging
 from collections import ChainMap
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 from phosphorus.core.stypes import Type
 
@@ -167,6 +167,51 @@ class _Infer(ast.NodeTransformer):
       node.guard = guards[0] if len(guards) == 1 else \
         ast.BoolOp(ast.And(), guards)
 
+    return node
+
+  # -------------------------------------------------------------------
+  #  binary operations - propagate type from left operand of %
+  # -------------------------------------------------------------------
+
+  def visit_BinOp(self, node: ast.BinOp):
+    self.generic_visit(node)
+    match node:
+      case ast.BinOp(left=left, op=ast.Mod()):
+        node.stype = getattr(left, "stype", None)
+    return node
+
+  # -------------------------------------------------------------------
+  #  boolean operations - assume Type.t but log if operands mismatch
+  # -------------------------------------------------------------------
+
+  def visit_BoolOp(self, node: ast.BoolOp):
+    """Handle boolean operators (And, Or)."""
+    self.generic_visit(node)
+    
+    node.stype = Type.t
+    
+    # Check if any operand has a known type that's not Type.t or unknown
+    for value in node.values:
+      value_type = getattr(value, "stype", None)
+      if value_type is not None and not value_type.is_unknown and value_type is not Type.t:
+        LOG.warning("Type mismatch in boolean operation: expected %s, got %s in %s",
+                   Type.t, value_type, ast.unparse(node))
+    
+    return node
+  
+  def visit_UnaryOp(self, node: ast.UnaryOp):
+    """Handle unary operators, specifically Not."""
+    self.generic_visit(node)
+    
+    if isinstance(node.op, ast.Not):
+      node.stype = Type.t
+      
+      # Check if operand has a known type that's not Type.t or unknown
+      operand_type = getattr(node.operand, "stype", None)
+      if operand_type is not None and not operand_type.is_unknown and operand_type is not Type.t:
+        LOG.warning("Type mismatch in Not operation: expected %s, got %s in %s",
+                   Type.t, operand_type, ast.unparse(node))
+    
     return node
 
 
