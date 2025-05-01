@@ -185,3 +185,5 @@ from .lambda_pass import BetaReducer
 PASS_PIPELINE.insert(1, BetaReducer)
 from .macro_pass import MacroExpander
 PASS_PIPELINE.append(MacroExpander)
+from .guard_pass import GuardFolder
+PASS_PIPELINE.append(GuardFolder)

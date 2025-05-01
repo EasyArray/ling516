@@ -48,7 +48,7 @@ class PhiValue:
 
     # 3. beta‑reduce / macro‑expand (pure)
     simplified = simplify(expr, env=env)
-    simplified_guard = simplify(guard or inferred_guard, env=env)
+    simplified_guard = inferred_guard and simplify(guard or inferred_guard, env=env)
 
     # 4. store
     self.expr  = simplified
@@ -96,6 +96,12 @@ class PhiValue:
                 (ast.dump(self.guard, annotate_fields=False) ==
                  ast.dump(other.guard, annotate_fields=False)))
     return NotImplemented
+
+  def __mod__(self, guard):
+    from phosphorus.semantics.interpret import UNDEF  # sentinel for undefined
+    if not guard:
+      return UNDEF
+    return self
 
   def __repr__(self):
     return ast.unparse(self.expr)

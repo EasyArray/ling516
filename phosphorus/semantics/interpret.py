@@ -32,6 +32,7 @@ from inspect import Parameter, signature
 from typing import Any, Callable, Mapping
 
 from phosphorus.syntax.tree import Tree
+from phosphorus.core.phivalue import PhiValue
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
@@ -43,7 +44,17 @@ logger.addHandler(logging.NullHandler())
 VACUOUS: Any = object()
 UNDEF: Any = object()
 
-__all__ = ["VACUOUS", "UNDEF", "Interpreter"]
+__all__ = ["VACUOUS", "UNDEF", "Interpreter", "defined"]
+
+# ——————————————————————————————————————————————
+# Helpers
+# ——————————————————————————————————————————————
+
+def defined(value: PhiValue) -> bool:
+  """Check if a PhiValue is defined (not UNDEF)."""
+  if isinstance(value, PhiValue):
+    return value.eval() is not UNDEF
+  return False
 
 # ——————————————————————————————————————————————
 # Interpreter
