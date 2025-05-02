@@ -55,7 +55,7 @@ def render_phi_html(code: str | ast.AST, stype: object, guard: str | ast.AST) ->
   )
 
   # 5) Return wrapper with table layout for alignment and theme support
-  return f"""
+  return f"""<div>
   <style>
     .pv-wrapper {{
       display: table;
@@ -74,12 +74,11 @@ def render_phi_html(code: str | ast.AST, stype: object, guard: str | ast.AST) ->
     .pv-code {{
       padding-right: 1em;
       text-align: left;
-      min-width: 45ch;
     }}
     .pv-badge {{ padding-left: 0.5em; }}
   </style>
   <div class="pv-wrapper">
     <div class="pv-code">{code_html}</div>
     <div class="pv-badge">{badge}</div>
-  </div>
+  </div></div>
   """

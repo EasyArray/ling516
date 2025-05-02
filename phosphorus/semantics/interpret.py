@@ -120,8 +120,9 @@ class Interpreter:
     for rule in self.rules:
       val = self._try_rule(rule, node, child_vals)
       if val is not UNDEF:
-        if isinstance(node, Tree):
+        try:
           node.sem = val
+        except: pass
         return val
 
     # 5. No rule succeeded
