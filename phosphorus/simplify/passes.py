@@ -38,21 +38,6 @@ class NameInliner(SimplifyPass):
       if hasattr(val, "expr") and isinstance(val.expr, ast.AST):
         return val.expr
     return node
-  
-  def visit_Subscript(self, node):
-    # Inline identifiers in subscript
-    match node:
-      case Subscript(value=Name(ctx=Load()) as value, slice=slice) if value.id in self.env:
-        
-    if isinstance(node.value, Name) and node.value.id in self.env:
-      val = self.env[node.value.id]
-      if is_literal(val):
-        return parse(repr(val), mode="eval").body
-      # Inline any object with an .expr attribute that is an AST node
-      if hasattr(val, "expr") and isinstance(val.expr, ast.AST):
-        return val.expr
-    return node
-
 
 class DictMergeFolder(SimplifyPass):
   """
@@ -83,24 +68,42 @@ class DictLookupFolder(SimplifyPass):
   Fold dict lookups for literal keys or matching Name keys:
     {'a':1}['a'] → 1
     {i:1}[i]     → 1
+    (d | {1:x})[1] → x
   """
   TESTS = [
     ("{'a':1}['a']", "1"),
     ("{i:1}[i]", "1"),
+    ("(d | {1:x})[1]", "x"),
   ]
   def visit_Subscript(self, node: Subscript):
     self.generic_visit(node)
-    # constant key
-    if isinstance(node.value, Dict) and isinstance(node.slice, Constant):
-      mapping = {k.value: v for k, v in zip(node.value.keys, node.value.values)
-                 if isinstance(k, Constant)}
-      if node.slice.value in mapping:
-        return mapping[node.slice.value]
-    # Name key
-    if isinstance(node.value, Dict) and isinstance(node.slice, Name):
-      for k, v in zip(node.value.keys, node.value.values):
-        if isinstance(k, Name) and k.id == node.slice.id:
-          return v
+    match node:
+      # {'a':1}['a'] → 1 (constant key)
+      case Subscript(value=Dict(keys=keys, values=values), slice=Constant(value=key)):
+        mapping = {k.value: v for k, v in zip(keys, values) if isinstance(k, Constant)}
+        if key in mapping:
+          return mapping[key]
+      # {i:1}[i] → 1 (name key)
+      case Subscript(value=Dict(keys=keys, values=values), slice=Name(id=key_id)):
+        for k, v in zip(keys, values):
+          if isinstance(k, Name) and k.id == key_id:
+            return v
+      # (d | {k: v})[k] → v (RHS dict, constant key)
+      case Subscript(
+        value=BinOp(op=BitOr(), right=Dict(keys=rhs_keys, values=rhs_values)),
+        slice=Constant(value=key)
+      ):
+        for k, v in zip(rhs_keys, rhs_values):
+          if isinstance(k, Constant) and k.value == key:
+            return v
+      # (d | {k: v})[k] → v (RHS dict, name key)
+      case Subscript(
+        value=BinOp(op=BitOr(), right=Dict(keys=rhs_keys, values=rhs_values)),
+        slice=Name(id=key_id)
+      ):
+        for k, v in zip(rhs_keys, rhs_values):
+          if isinstance(k, Name) and k.id == key_id:
+            return v
     return node
 
 

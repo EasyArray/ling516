@@ -71,7 +71,7 @@ class _Infer(ast.NodeTransformer):
   #  DSL subscript [type]  or [type:guard]
   # -------------------------------------------------------------------
 
-  def visit_Subscript(self, node: ast.Subscript):
+  def XXvisit_Subscript(self, node: ast.Subscript): #Turned off for now
     node.value = self.visit(node.value)
     type_spec, guard = _slice_to_spec(node.slice)
 

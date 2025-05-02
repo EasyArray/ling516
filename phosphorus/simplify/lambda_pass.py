@@ -105,30 +105,100 @@ class _NameSubstituter(NodeTransformer):
 # Beta‑reducer pass
 # ---------------------------------------------------------------------------
 class BetaReducer(SimplifyPass):
-  """Inline a lambda call with positional arguments, with capture‑avoidance."""
+  """Inline lambda calls (positional *and* keyword) and substitute free
+  variables via keyword arguments. For non‑lambda callables we perform the
+  substitution only when the call has **no positional arguments**—this
+  mirrors ``PhiValue.__call__`` where keywords are treated as environment
+  overrides.
+  """
 
   TESTS = [
-    ("(lambda x: x + 1)(3)",       "3 + 1"),
-    ("((lambda x: (lambda y: x + y))(1))(2)", "1 + 2"),
-    ("(lambda x, y: x * y)(2, 5)",  "2 * 5"),
-    # capture‑avoidance of outer free variable
-    ("(lambda y: (lambda x: x + y))(x)",    "lambda x_1: x_1 + x"),
-    # capture‑avoidance inside inner lambda shadowing
-    ("(lambda x: (lambda x: x + y))(3)",   "lambda x: x + y"),
+    # positional + keyword on lambda
+    ("(lambda x, y: x * y)(2, y=5)",               "2 * 5"),
+    # free‑var binding via keyword
+    ("(lambda x: LOVES(x,a))(Mary, a=John)",        "LOVES(Mary, John)"),
+    # non‑lambda callable with keyword‑only override
+    ("LOVES(Mary,a)(a=John)",                       "LOVES(Mary, John)"),
+    # original positional‑only inlining
+    ("(lambda x, y: x * y)(2, 5)",                 "2 * 5"),
+    # nested lambdas with positional args
+    ("((lambda x: (lambda y: x + y))(1))(2)",      "1 + 2"),
+    # capture‑avoidance with keyword binding
+    ("(lambda y: (lambda x: x + y))(y=x)",          "lambda x_1: x_1 + x"),
   ]
 
+  # ------------------------------------------------------------------
+  # main visitor
+  # ------------------------------------------------------------------
   def visit_Call(self, node: Call) -> AST:
+    # First recurse into children
     self.generic_visit(node)
+
+    # Fast‑path: no keyword args → original positional‑only logic
+    if not node.keywords:
+      return self._inline_lambda_positional_only(node)
+
+    # Ignore calls with **kwargs (kw.arg is None)
+    if any(kw.arg is None for kw in node.keywords):
+      return node
+
+    kw_bindings: dict[str, AST] = {kw.arg: kw.value for kw in node.keywords}
+
+    # ------------------------------------------------------------------
+    # CASE 1 : literal Lambda target
+    # ------------------------------------------------------------------
+    if isinstance(node.func, Lambda):
+      lam: Lambda = node.func
+      params = [p.arg for p in lam.args.args]
+
+      # Too many positional args → leave untouched
+      if len(node.args) > len(params):
+        return node
+
+      # 1) bind parameters from positional args
+      param_bindings: dict[str, AST] = dict(zip(params, node.args))
+
+      # 2) bind parameters from keyword args (error on duplicates)
+      for name, value in kw_bindings.items():
+        if name in params:
+          if name in param_bindings:
+            return node  # duplicate binding
+          param_bindings[name] = value
+
+      # Abort if any parameter unbound
+      if len(param_bindings) != len(params):
+        return node
+
+      # Unified substitution map: parameters + extra keyword env
+      subst_map = param_bindings | {k: v for k, v in kw_bindings.items() if k not in params}
+
+      body_copy = deepcopy(lam.body)
+      new_body = _NameSubstituter(subst_map).visit(body_copy)
+      return new_body
+
+    # ------------------------------------------------------------------
+    # CASE 2 : arbitrary callable (e.g. LOVES(Mary,a)(a=John))
+    # Only when there are *no* positional args.
+    # ------------------------------------------------------------------
+    if node.args:
+      return node  # positional args present → leave untouched
+
+    func_copy = deepcopy(node.func)
+    func_copy = _NameSubstituter(kw_bindings).visit(func_copy)
+    return func_copy
+  
+  # ------------------------------------------------------------------
+  # helper: original positional‑only lambda inliner (unchanged)
+  # ------------------------------------------------------------------
+  def _inline_lambda_positional_only(self, node: Call) -> AST:
     if not isinstance(node.func, Lambda):
       return node
 
-    params = [a.arg for a in node.func.args.args]
-    if len(params) != len(node.args) or node.keywords:
+    lam: Lambda = node.func
+    params = [p.arg for p in lam.args.args]
+    if len(params) != len(node.args):
       return node
 
-    lam_copy: Lambda = deepcopy(node.func)
-    subst_map: Dict[str, AST] = dict(zip(params, node.args))
-
-    reducer = _NameSubstituter(subst_map)
-    new_body = reducer.visit(lam_copy.body)
-    return new_body
+    lam_copy = deepcopy(lam)
+    subst_map = dict(zip(params, node.args))
+    return _NameSubstituter(subst_map).visit(lam_copy.body)
