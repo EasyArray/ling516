@@ -17,6 +17,8 @@ class SimplifyPass(NodeTransformer):
 
 # ─────────────────────────────
 #  Passes with Tests
+#    TODO: inlining ASTs breaks alpha-conversion / acts as a macro
+#          Is that what we want?
 # ─────────────────────────────
 class NameInliner(SimplifyPass):
   """
@@ -30,6 +32,20 @@ class NameInliner(SimplifyPass):
   def visit_Name(self, node: Name):
     if isinstance(node.ctx, Load) and node.id in self.env:
       val = self.env[node.id]
+      if is_literal(val):
+        return parse(repr(val), mode="eval").body
+      # Inline any object with an .expr attribute that is an AST node
+      if hasattr(val, "expr") and isinstance(val.expr, ast.AST):
+        return val.expr
+    return node
+  
+  def visit_Subscript(self, node):
+    # Inline identifiers in subscript
+    match node:
+      case Subscript(value=Name(ctx=Load()) as value, slice=slice) if value.id in self.env:
+        
+    if isinstance(node.value, Name) and node.value.id in self.env:
+      val = self.env[node.value.id]
       if is_literal(val):
         return parse(repr(val), mode="eval").body
       # Inline any object with an .expr attribute that is an AST node

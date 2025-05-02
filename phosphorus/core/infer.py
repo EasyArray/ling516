@@ -130,6 +130,7 @@ class _Infer(ast.NodeTransformer):
 
   # -------------------------------------------------------------------
   #  calls  — compose guards
+  #     TODO: infer types for atomic formulas: ALL_CAPS(x,y,...)
   # -------------------------------------------------------------------
 
   def visit_Call(self, node: ast.Call):

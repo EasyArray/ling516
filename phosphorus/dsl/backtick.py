@@ -21,6 +21,8 @@ from typing import Iterable
 from IPython import get_ipython
 from phosphorus.core.phivalue import PhiValue
 
+# TODO: (`beta(A.e)).stype throws an error somehow
+
 # ---------------------------------------------------------------------------
 # constants
 # ---------------------------------------------------------------------------
