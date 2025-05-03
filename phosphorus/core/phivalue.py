@@ -130,7 +130,7 @@ class PhiValue:
   # Jupyter rich repr
   def _repr_html_(self):
     #return f"<code>{ast.unparse(self.expr)}</code>  <small>{self.stype}</small>"
-    return render_phi_html(self.expr, stype=self.stype, guard=self.guard)
+    return render_phi_html(self.expr, stype=self.stype)
 
 # ---------------------------------------------------------------------------
 #  rudimentary tests
