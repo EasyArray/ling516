@@ -96,7 +96,13 @@ def render_phi_html(
   layout = 'inline'   →  code + badge on the same row
   layout = 'stacked'  →  badge on 1st row, code below (compact for tree nodes)
   """
-  inject_css()                     # make sure global CSS is present
+  # 1) inline the CSS exactly once
+  global _css_injected
+  if not _css_injected:
+      css_block = _CSS
+      _css_injected = True
+  else:
+      css_block = ''
 
   # 1) normalise inputs
   if isinstance(code, ast.AST):
@@ -122,6 +128,7 @@ def render_phi_html(
     flow  = "row"
 
   return (
+    f"{css_block}"
     f"<div class='phi-wrapper' style='grid-auto-flow:{flow};{width_css}'>"
     f"{inner}</div>"
   )

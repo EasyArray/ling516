@@ -1,9 +1,12 @@
 # phosphorus/simplify/passes.py
 from ast import *
 from typing import List, Type
+from collections import ChainMap
 from .utils import is_literal
 import ast
 
+# Sentinel for shadowing the environment in SimplifyPass
+_SHADOW = object()
 
 # ─────────────────────────────
 #  Base class
@@ -29,9 +32,27 @@ class NameInliner(SimplifyPass):
     ("x", "1"),
     ("(1,2,3)[0]", "(1, 2, 3)[0]"),  # non‑literal index — no change
   ]
+
+  def visit_Lambda(self, node: Lambda) -> Lambda:
+    # collect all parameter names (positional, vararg, kwonly, kwarg)
+    names = {a.arg for a in node.args.args}
+    if node.args.vararg:   names.add(node.args.vararg.arg)
+    for a in node.args.kwonlyargs: names.add(a.arg)
+    if node.args.kwarg:    names.add(node.args.kwarg.arg)
+
+    # push a new scope that shadows these names
+    self.env = ChainMap({n: _SHADOW for n in names}, self.env)
+    try:
+      return self.generic_visit(node)
+    finally:
+      # pop that scope quickly: O(1)
+      self.env = self.env.parents
+
   def visit_Name(self, node: Name):
     if isinstance(node.ctx, Load) and node.id in self.env:
       val = self.env[node.id]
+      if val is _SHADOW:
+        return node
       if is_literal(val):
         return parse(repr(val), mode="eval").body
       # Inline any object with an .expr attribute that is an AST node

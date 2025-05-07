@@ -7,14 +7,18 @@ natural language semantics in the style of Heim & Kratzer (1998)."""
 from string import ascii_uppercase
 from IPython import get_ipython
 
-# Install the backtick DSL for PhiValue literals
-import phosphorus.dsl.backtick
-
 from phosphorus.semantics.interpret import Interpreter, defined
 from phosphorus.syntax.tree import Tree
 from phosphorus.core.phivalue import PhiValue
 from phosphorus.core.stypes import Type, takes
 from phosphorus.core.constants import UNDEF, VACUOUS
+
+# Install the backtick DSL for PhiValue literals
+import phosphorus.dsl.backtick
+
+# Install the CSS for rendering PhiValues in Jupyter
+from phosphorus.core.display import inject_css
+inject_css()
 
 DOMAIN = [PhiValue(repr(c), stype=Type.e) for c in ascii_uppercase]
 
