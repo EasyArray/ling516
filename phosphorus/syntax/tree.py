@@ -101,10 +101,11 @@ def split_with_sem(node):
   # 4) Wrap both lines in a single <div> grid for vertical stacking
   combined_html = (
     "<div style='display:inline-grid;"
-    "grid-auto-flow:row;justify-items:center;"
-    f"text-align:center;{width_css}'>"
+    "grid-auto-flow:row;justify-items:start;padding:0 .75em;"
+    f"{width_css}'>"
     f'{_CSS}'
-    f"{first_line}{code_html}</div>"
+    f"<div style='justify-self:center'>{first_line}</div>"
+    f"<div style='justify-self:start'>{code_html}</div></div>"
   )
 
   # 5) Parse the HTML into an Element, ensuring a single root for svgling
