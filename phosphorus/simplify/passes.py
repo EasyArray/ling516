@@ -70,17 +70,26 @@ class DictMergeFolder(SimplifyPass):
   ]
   def visit_BinOp(self, node: BinOp):
     self.generic_visit(node)
-    if isinstance(node.op, BitOr) and isinstance(node.left, Dict) and isinstance(node.right, Dict):
-      merged = {}
-      for d in (node.left, node.right):
-        for k, v in zip(d.keys, d.values):
-          if not isinstance(k, Constant):
-            return node
-          merged[k.value] = v
-      return Dict(
-        keys=[Constant(value=k) for k in merged],
-        values=list(merged.values())
-      )
+    match(node):
+      case BinOp(op=BitOr(), 
+                 left=Dict(keys=keys1, values=values1), 
+                 right=Dict(keys=keys2, values=values2)):
+        # merge two dicts
+        keys   = keys1 + keys2
+        values = values1 + values2
+
+        # use the source‐string of each key as the merge‐dict key
+        merged: dict[str, tuple[AST, AST]] = {
+          ast.unparse(k): (k, v)
+          for k, v in zip(keys, values)
+        }
+
+        # rebuild our Dict node from the final (k,v) pairs
+        if not merged:
+          return node
+        new_keys, new_values = zip(*merged.values())
+        return Dict(keys=list(new_keys), values=list(new_values))
+
     return node
 
 
