@@ -93,7 +93,7 @@ def split_with_sem(node):
     pretty = format_str(ast.unparse(sem.expr), mode=Mode(line_length=50))
     code_html   = make_code_html(pretty, font_size='11px')
     max_chars = max(len(line) for line in pretty.splitlines())
-    width_css = f"min-width:{max_chars + 4}ch;"   # +4 for padding
+    width_css = f"min-width:{max_chars + 2}ch;"   # +x for padding
   else:
     code_html = sem._repr_html_() if hasattr(sem, '_repr_html_') else str(sem)
     width_css = ''
@@ -101,11 +101,11 @@ def split_with_sem(node):
   # 4) Wrap both lines in a single <div> grid for vertical stacking
   combined_html = (
     "<div style='display:inline-grid;"
-    "grid-auto-flow:row;justify-items:start;padding:0 .75em;"
+    "grid-auto-flow:row;justify-items:center;padding:0 .75em;"
     f"{width_css}'>"
     f'{_CSS}'
-    f"<div style='justify-self:center'>{first_line}</div>"
-    f"<div style='justify-self:start'>{code_html}</div></div>"
+    f"{first_line}"
+    f"<div style='text-align:left;'>{code_html}</div></div>"
   )
 
   # 5) Parse the HTML into an Element, ensuring a single root for svgling
