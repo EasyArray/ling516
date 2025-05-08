@@ -62,11 +62,11 @@ class PhiValue:
   #  functional behaviour
   # ---------------------------------------------------------------------
 
-  def __call__(self, *args: "PhiValue") -> "PhiValue":
+  def __call__(self, *args: "PhiValue", **kwargs) -> "PhiValue":
     call_ast = ast.Call(
       func=copy.deepcopy(self.expr),
       args=[copy.deepcopy(a.expr) for a in args],
-      keywords=[]
+      keywords=[ast.keyword(arg=k, value=copy.deepcopy(kwargs[k].expr)) for k in kwargs]
     )
     phi = PhiValue(call_ast)
     try:
