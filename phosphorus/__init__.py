@@ -17,8 +17,8 @@ from .core.constants import UNDEF, VACUOUS
 from .dsl import backtick
 
 # Install the CSS for rendering PhiValues in Jupyter
-from .core.display import inject_css
-inject_css()
+#from .core.display import inject_css
+#inject_css()
 
 DOMAIN = [PhiValue(repr(c), stype=Type.e) for c in ascii_uppercase]
 
