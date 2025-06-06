@@ -55,7 +55,7 @@ class PhiValue:
     # 4. store
     self.expr  = simplified
     self._env  = ChainMap({}, env)     # make a shallow, isolated view
-    self.stype = stype or inferred_type
+    self.stype = stype or inferred_type or getattr(simplified, "stype", None)
     self.guard = simplified_guard
 
   # ---------------------------------------------------------------------
