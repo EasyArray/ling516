@@ -12,7 +12,7 @@ import html
 import svgling
 from nltk import Tree as _NLTKTree
 from phosphorus.core.phivalue import PhiValue
-from phosphorus.core.display import make_badge_html, make_code_html
+from phosphorus.core.display import make_badge_html, make_code_html, _CSS
 
 import svgling.html as svh
 from svgling.core import VertAlign
@@ -93,17 +93,19 @@ def split_with_sem(node):
     pretty = format_str(ast.unparse(sem.expr), mode=Mode(line_length=50))
     code_html   = make_code_html(pretty, font_size='11px')
     max_chars = max(len(line) for line in pretty.splitlines())
-    width_css = f"min-width:{max_chars + 4}ch;"   # +4 for padding
+    width_css = f"min-width:{max_chars + 2}ch;"   # +x for padding
   else:
     code_html = sem._repr_html_() if hasattr(sem, '_repr_html_') else str(sem)
     width_css = ''
     
   # 4) Wrap both lines in a single <div> grid for vertical stacking
   combined_html = (
-      "<div style='display:inline-grid;"
-      "grid-auto-flow:row;justify-items:center;"
-      f"text-align:center;{width_css}'>"
-      f"{first_line}{code_html}</div>"
+    "<div style='display:inline-grid;"
+    "grid-auto-flow:row;justify-items:center;padding:0 .75em;"
+    f"{width_css}'>"
+    f'{_CSS}'
+    f"{first_line}"
+    f"<div style='text-align:left;'>{code_html}</div></div>"
   )
 
   # 5) Parse the HTML into an Element, ensuring a single root for svgling

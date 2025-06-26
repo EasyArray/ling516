@@ -16,15 +16,17 @@ from IPython.display import HTML, display
 _CSS = """
 <style id="phi-css">
   .phi-wrapper {
-      display: grid;
-      grid-gap: .4em;
-      grid-auto-flow: column;
-      align-items: start;
-      justify-items: start;
-      padding: .4em .6em;
-      border-radius: 6px;
-      background: var(--jp-layout-color1, #f5f5f5);
-      color: var(--jp-ui-font-color1, #000);
+    display: grid;
+    grid-gap: .4em;
+    grid-auto-flow: column;
+    grid-template-columns: minmax(60ch, max-content) auto; /* ≥60ch, but grow to fit code, then badge */
+    grid-gap: .4em;
+    align-items: start;
+    justify-items: start;
+    padding: .4em .6em;
+    border-radius: 6px;
+    background: var(--jp-layout-color1, #f5f5f5);
+    color: var(--jp-ui-font-color1, #000);
   }
   @media (prefers-color-scheme: dark) {
     .phi-wrapper {
@@ -96,7 +98,6 @@ def render_phi_html(
   layout = 'inline'   →  code + badge on the same row
   layout = 'stacked'  →  badge on 1st row, code below (compact for tree nodes)
   """
-  inject_css()                     # make sure global CSS is present
 
   # 1) normalise inputs
   if isinstance(code, ast.AST):
@@ -112,6 +113,7 @@ def render_phi_html(
   # 4) compute a reasonable min‑width based on longest line of `pretty`
   max_chars = max(len(line) for line in pretty.splitlines())
   width_css = f"min-width:{max_chars + 4}ch;"   # +4 for padding
+  width_css = ''
 
   # 5) assemble according to layout
   if layout == 'inline':
@@ -122,6 +124,7 @@ def render_phi_html(
     flow  = "row"
 
   return (
+    f"{_CSS}"
     f"<div class='phi-wrapper' style='grid-auto-flow:{flow};{width_css}'>"
     f"{inner}</div>"
   )

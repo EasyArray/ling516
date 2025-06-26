@@ -134,9 +134,7 @@ class _Infer(ast.NodeTransformer):
   # -------------------------------------------------------------------
 
   def visit_Call(self, node: ast.Call):
-    node.func = self.visit(node.func)
-    if node.args:
-      node.args[0] = self.visit(node.args[0])
+    node = self.generic_visit(node)
 
     # ---------- type inference (unchanged) ----------------------------
     fn_t = getattr(node.func, "stype", None)

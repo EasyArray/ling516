@@ -55,18 +55,18 @@ class PhiValue:
     # 4. store
     self.expr  = simplified
     self._env  = ChainMap({}, env)     # make a shallow, isolated view
-    self.stype = stype or inferred_type
+    self.stype = stype or inferred_type or getattr(simplified, "stype", None)
     self.guard = simplified_guard
 
   # ---------------------------------------------------------------------
   #  functional behaviour
   # ---------------------------------------------------------------------
 
-  def __call__(self, *args: "PhiValue") -> "PhiValue":
+  def __call__(self, *args: "PhiValue", **kwargs) -> "PhiValue":
     call_ast = ast.Call(
       func=copy.deepcopy(self.expr),
       args=[copy.deepcopy(a.expr) for a in args],
-      keywords=[]
+      keywords=[ast.keyword(arg=k, value=copy.deepcopy(kwargs[k].expr)) for k in kwargs]
     )
     phi = PhiValue(call_ast)
     try:

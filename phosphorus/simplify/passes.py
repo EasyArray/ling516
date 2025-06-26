@@ -1,9 +1,12 @@
 # phosphorus/simplify/passes.py
 from ast import *
 from typing import List, Type
+from collections import ChainMap
 from .utils import is_literal
 import ast
 
+# Sentinel for shadowing the environment in SimplifyPass
+_SHADOW = object()
 
 # ─────────────────────────────
 #  Base class
@@ -29,9 +32,27 @@ class NameInliner(SimplifyPass):
     ("x", "1"),
     ("(1,2,3)[0]", "(1, 2, 3)[0]"),  # non‑literal index — no change
   ]
+
+  def visit_Lambda(self, node: Lambda) -> Lambda:
+    # collect all parameter names (positional, vararg, kwonly, kwarg)
+    names = {a.arg for a in node.args.args}
+    if node.args.vararg:   names.add(node.args.vararg.arg)
+    for a in node.args.kwonlyargs: names.add(a.arg)
+    if node.args.kwarg:    names.add(node.args.kwarg.arg)
+
+    # push a new scope that shadows these names
+    self.env = ChainMap({n: _SHADOW for n in names}, self.env)
+    try:
+      return self.generic_visit(node)
+    finally:
+      # pop that scope quickly: O(1)
+      self.env = self.env.parents
+
   def visit_Name(self, node: Name):
     if isinstance(node.ctx, Load) and node.id in self.env:
       val = self.env[node.id]
+      if val is _SHADOW:
+        return node
       if is_literal(val):
         return parse(repr(val), mode="eval").body
       # Inline any object with an .expr attribute that is an AST node
@@ -49,17 +70,26 @@ class DictMergeFolder(SimplifyPass):
   ]
   def visit_BinOp(self, node: BinOp):
     self.generic_visit(node)
-    if isinstance(node.op, BitOr) and isinstance(node.left, Dict) and isinstance(node.right, Dict):
-      merged = {}
-      for d in (node.left, node.right):
-        for k, v in zip(d.keys, d.values):
-          if not isinstance(k, Constant):
-            return node
-          merged[k.value] = v
-      return Dict(
-        keys=[Constant(value=k) for k in merged],
-        values=list(merged.values())
-      )
+    match(node):
+      case BinOp(op=BitOr(), 
+                 left=Dict(keys=keys1, values=values1), 
+                 right=Dict(keys=keys2, values=values2)):
+        # merge two dicts
+        keys   = keys1 + keys2
+        values = values1 + values2
+
+        # use the source‐string of each key as the merge‐dict key
+        merged: dict[str, tuple[AST, AST]] = {
+          ast.unparse(k): (k, v)
+          for k, v in zip(keys, values)
+        }
+
+        # rebuild our Dict node from the final (k,v) pairs
+        if not merged:
+          return node
+        new_keys, new_values = zip(*merged.values())
+        return Dict(keys=list(new_keys), values=list(new_values))
+
     return node
 
 
