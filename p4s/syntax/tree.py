@@ -11,8 +11,8 @@ import ast
 import html
 import svgling
 from nltk import Tree as _NLTKTree
-from phosphorus.core.phivalue import PhiValue
-from phosphorus.core.display import make_badge_html, make_code_html, _CSS
+from p4s.core.phivalue import PhiValue
+from p4s.core.display import make_badge_html, make_code_html, _CSS
 
 import svgling.html as svh
 from svgling.core import VertAlign

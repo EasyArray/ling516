@@ -24,7 +24,7 @@ from __future__ import annotations
 import ast
 from collections import deque
 
-from phosphorus.core.constants import UNDEF   # sentinel for undefined values
+from p4s.core.constants import UNDEF   # sentinel for undefined values
 from .passes import SimplifyPass   # base class provides .env (ChainMap)
 
 # sentinel name for undefined

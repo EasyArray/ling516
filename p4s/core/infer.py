@@ -14,7 +14,7 @@ import logging
 from collections import ChainMap
 from typing import Any, Mapping
 
-from phosphorus.core.stypes import Type
+from .stypes import Type
 
 LOG = logging.getLogger(__name__)
 

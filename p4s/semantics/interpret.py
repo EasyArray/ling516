@@ -31,9 +31,9 @@ import logging
 from inspect import Parameter, signature
 from typing import Any, Callable, Mapping
 
-from phosphorus.syntax.tree import Tree
-from phosphorus.core.phivalue import PhiValue
-from phosphorus.core.constants import UNDEF, VACUOUS
+from p4s.syntax.tree import Tree
+from p4s.core.phivalue import PhiValue
+from p4s.core.constants import UNDEF, VACUOUS
 
 
 logger = logging.getLogger(__name__)

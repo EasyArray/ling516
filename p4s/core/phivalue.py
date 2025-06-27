@@ -12,12 +12,12 @@ import copy
 from collections import ChainMap
 from typing import Any, Optional
 
-from phosphorus.simplify           import simplify          # local functional API
-from phosphorus.simplify.utils     import capture_env       # caller env snapshot
-from phosphorus.core.display       import render_phi_html   # rich HTML helper
-from phosphorus.core.infer         import infer_and_strip   # type checker / DSL stripper
-from phosphorus.core.stypes        import Type              # semantic type system
-from phosphorus.core.constants     import UNDEF             # sentinel for undefined values
+from p4s.simplify           import simplify          # local functional API
+from p4s.simplify.utils     import capture_env       # caller env snapshot
+from p4s.core.display       import render_phi_html   # rich HTML helper
+from p4s.core.infer         import infer_and_strip   # type checker / DSL stripper
+from p4s.core.stypes        import Type              # semantic type system
+from p4s.core.constants     import UNDEF             # sentinel for undefined values
 
 # ---------------------------------------------------------------------------
 #  PhiValue

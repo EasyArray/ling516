@@ -1,0 +1,19 @@
+[build-system]
+requires    = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "p4s"
+version         = "0.4.0"                   
+description     = "Phosphorus: a lightweight semantics toolkit"
+#readme          = "README.md"               
+requires-python = ">=3.11"
+dependencies    = [
+  "svgling",
+  "black",
+  "nltk",
+  "pygments"
+]
+
+[tool.setuptools]
+packages = ["p4s"]

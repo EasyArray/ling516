@@ -22,10 +22,10 @@ register_ch3(interp)
 import ast
 import logging
 
-from phosphorus.semantics.interpret import Interpreter, UNDEF
-from phosphorus.syntax.tree           import Tree
-from phosphorus.core.phivalue         import PhiValue
-from phosphorus.core.stypes           import takes
+from p4s.semantics.interpret import Interpreter, UNDEF
+from p4s.syntax.tree           import Tree
+from p4s.core.phivalue         import PhiValue
+from p4s.core.stypes           import takes
 
 __all__ = ["register_ch3"]
 
