@@ -63,6 +63,13 @@ class PhiValue:
   # ---------------------------------------------------------------------
 
   def __call__(self, *args: "PhiValue", **kwargs) -> "PhiValue":
+    # Attach type info BEFORE deepcopy so it gets copied
+    if self.stype is not None:
+      self.expr.stype = self.stype
+    for a in args:
+      if a.stype is not None:
+        a.expr.stype = a.stype
+    
     call_ast = ast.Call(
       func=copy.deepcopy(self.expr),
       args=[copy.deepcopy(a.expr) for a in args],
@@ -70,7 +77,11 @@ class PhiValue:
     )
     phi = PhiValue(call_ast)
     try:
-      return phi.eval()
+      result = phi.eval()
+      # Keep lambda-like results as PhiValue for rich display
+      if callable(result):
+        return phi
+      return result
     except:
       return phi
 
@@ -93,8 +104,12 @@ class PhiValue:
     return bool(self.eval())
 
   def __hash__(self):
-    return hash((ast.dump(self.expr, annotate_fields=False), self.stype, 
-                 ast.dump(self.guard, annotate_fields=False)))
+    guard_dump = None if self.guard is None else ast.dump(self.guard, annotate_fields=False)
+    return hash((
+      ast.dump(self.expr, annotate_fields=False),
+      self.stype,
+      guard_dump,
+    ))
 
   def __eq__(self, other):
     if isinstance(other, PhiValue):

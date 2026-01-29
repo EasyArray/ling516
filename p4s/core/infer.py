@@ -91,6 +91,11 @@ class _Infer(ast.NodeTransformer):
   # -------------------------------------------------------------------
 
   def visit_Lambda(self, node: ast.Lambda):
+    # If the node already has a type (e.g., from a previous inference),
+    # trust it and don't recompute
+    if hasattr(node, "stype") and node.stype is not None:
+      return node
+    
     # 1. infer parameter types from default annotations
     rev_defaults = node.args.defaults[::-1]
     param_types = []
