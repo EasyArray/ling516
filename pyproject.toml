@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name            = "p4s"
-version         = "0.4.0"                   
+version         = "0.4.3"                   
 description     = "Phosphorus: a lightweight semantics toolkit"
 #readme          = "README.md"               
 requires-python = ">=3.11"
@@ -16,4 +16,4 @@ dependencies    = [
 ]
 
 [tool.setuptools]
-packages = ["p4s"]
+packages = ["p4s", "p4s.core", "p4s.dsl", "p4s.semantics", "p4s.simplify", "p4s.syntax"]
