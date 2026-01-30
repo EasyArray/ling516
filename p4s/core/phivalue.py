@@ -39,6 +39,9 @@ class PhiValue:
     # 0: parse or accept AST
     if isinstance(expr, str):
       expr = ast.parse(expr, mode="eval").body
+    elif isinstance(expr, (int, float, bool, str)):
+      # Convert basic Python literals to AST constants
+      expr = ast.Constant(value=expr)
 
     # 1. capture *caller* environment (skip this frame)
     env = capture_env(skip=1)          # ChainMap
@@ -63,6 +66,10 @@ class PhiValue:
   # ---------------------------------------------------------------------
 
   def __call__(self, *args: "PhiValue", **kwargs) -> "PhiValue":
+    # Convert basic types to PhiValues
+    args = tuple(PhiValue(a) if not isinstance(a, PhiValue) else a for a in args)
+    kwargs = {k: PhiValue(v) if not isinstance(v, PhiValue) else v for k, v in kwargs.items()}
+    
     # Attach type info BEFORE deepcopy so it gets copied
     if self.stype is not None:
       self.expr.stype = self.stype
