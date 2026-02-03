@@ -99,6 +99,7 @@ class _Infer(ast.NodeTransformer):
     # 1. infer parameter types from default annotations
     rev_defaults = node.args.defaults[::-1]
     param_types = []
+    param_env_objs = []  # Keep references to environment objects
     for i, arg in enumerate(node.args.args[::-1]):
       dflt = rev_defaults[i] if i < len(rev_defaults) else None
       if isinstance(dflt, ast.Attribute) and isinstance(dflt.value, ast.Name) and dflt.value.id == "Type":
@@ -114,13 +115,17 @@ class _Infer(ast.NodeTransformer):
     inner_env = {
       p.arg: type("_T", (), {"stype": t})() for p, t in zip(node.args.args, param_types)
     }
+    param_env_objs = [inner_env[p.arg] for p in node.args.args]  # Save references
     body_node = self.__class__(self.env.new_child(inner_env)).visit(node.body)
     node.body = body_node
 
     # 3. function type:  param_types → body_t
+    # Check if any parameter types were unified during body visit
+    unified_param_types = [getattr(obj, "stype", t) for obj, t in zip(param_env_objs, param_types)]
+    
     body_t = getattr(body_node, "stype", Type.fresh())
     fn_t = body_t
-    for dom in reversed(param_types):
+    for dom in reversed(unified_param_types):
       fn_t = Type((dom, fn_t))
     node.stype = fn_t
 
@@ -148,6 +153,16 @@ class _Infer(ast.NodeTransformer):
       dom = fn_t.domain
       if arg_t and dom.is_unknown:
         fn_t = Type((arg_t, fn_t.range))
+      elif arg_t and arg_t.is_unknown and not dom.is_unknown:
+        # Unify unknown argument type with the known domain type
+        arg_t = dom
+        node.args[0].stype = dom
+        # Also update the environment if this is a Name node
+        if isinstance(node.args[0], ast.Name):
+          var_name = node.args[0].id
+          env_val = self.env.get(var_name)
+          if env_val is not None and hasattr(env_val, "stype"):
+            env_val.stype = dom
       elif arg_t and arg_t != dom:
         LOG.warning("Type mismatch: expected %s, got %s in %s",
                     fn_t.domain, arg_t, ast.unparse(node))
