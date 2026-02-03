@@ -25,6 +25,8 @@ from p4s.core.phivalue import PhiValue
 
 # TODO: (`beta(A.e)).stype throws an error somehow
 
+# pylint: disable=non-ascii-name
+
 # ---------------------------------------------------------------------------
 # constants
 # ---------------------------------------------------------------------------
@@ -41,19 +43,17 @@ class PhiSubscriptPrefix:
     return f"PhiSubscriptPrefix(name={self.name!r})"
 
 phi = PhiSubscriptPrefix("phi")
-ϕ = PhiSubscriptPrefix("ϕ")
 qq = PhiSubscriptPrefix("qq")
 φ = PhiSubscriptPrefix("φ")
 ɸ = PhiSubscriptPrefix("ɸ")
 
-PHI_SUBSCRIPT_PREFIXES = {p.name: p for p in (phi, ϕ, qq, φ, ɸ)}
+PHI_SUBSCRIPT_PREFIXES = {p.name: p for p in (phi, qq, φ, ɸ)}
 PHI_SUBSCRIPT_NAMES = set(PHI_SUBSCRIPT_PREFIXES)
 
 __all__ = [
   "PHI_SUBSCRIPT_NAMES",
   "PhiSubscriptPrefix",
   "phi",
-  "ϕ",
   "qq",
   "φ",
   "ɸ",
