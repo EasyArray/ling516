@@ -28,6 +28,7 @@ from p4s.core.phivalue import PhiValue
 # ---------------------------------------------------------------------------
 
 PHI_NAME = "φ"   # single arg name for injected lambda
+PHI_SUBSCRIPT_NAMES = {"phi", "ϕ", "qq"}
 BACKTICK = "`"  # trigger character
 
 # ---------------------------------------------------------------------------
@@ -57,8 +58,8 @@ def backtick_token_transform(tokens: Iterable[tokenize.TokenInfo]):
 # 2. AST transformer – lambda φ: BODY  →  PhiValue(<AST of BODY>)
 # ---------------------------------------------------------------------------
 
-class LambdaPhiASTTransformer(ast.NodeTransformer):
-  """Rewrite 'lambda φ: BODY' into PhiValue(BODY_ast)."""
+class PhiValueASTTransformer(ast.NodeTransformer):
+  """Rewrite phi-lambda and phi-like subscripts into PhiValue literals."""
 
   def visit_Lambda(self, node: ast.Lambda):  # noqa: N802
     # match exactly one arg named φ
@@ -68,6 +69,17 @@ class LambdaPhiASTTransformer(ast.NodeTransformer):
       new_call = ast.Call(
         func=ast.Name(id="PhiValue", ctx=ast.Load()),
         args=[ast.Constant(value=body_src)],
+        keywords=[],
+      )
+      return ast.copy_location(new_call, node)
+    return self.generic_visit(node)
+
+  def visit_Subscript(self, node: ast.Subscript):  # noqa: N802
+    if isinstance(node.value, ast.Name) and node.value.id in PHI_SUBSCRIPT_NAMES:
+      slice_src = ast.unparse(node.slice)
+      new_call = ast.Call(
+        func=ast.Name(id="PhiValue", ctx=ast.Load()),
+        args=[ast.Constant(value=slice_src)],
         keywords=[],
       )
       return ast.copy_location(new_call, node)
@@ -94,7 +106,7 @@ def install_backtick_dsl() -> None:
   ip.input_transformers_post.append(token_replacer)
 
   # AST transformer
-  ip.ast_transformers.append(LambdaPhiASTTransformer())
+  ip.ast_transformers.append(PhiValueASTTransformer())
 
 # auto‑install in notebooks
 if get_ipython() is not None:
