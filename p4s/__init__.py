@@ -10,11 +10,12 @@ from IPython import get_ipython
 from .semantics.interpret import Interpreter, defined
 from .syntax.tree import Tree
 from .core.phivalue import PhiValue
-from .core.stypes import Type, takes
+from .core.stypes import *
 from .core.constants import UNDEF, VACUOUS
 
 # Install the backtick DSL for PhiValue literals
 from .dsl import backtick
+from .dsl.backtick import *
 
 # Install the CSS for rendering PhiValues in Jupyter
 #from .core.display import inject_css

@@ -236,5 +236,35 @@ def _run_tests() -> None:
   print("✅  All type‑system tests passed, including from_spec tests.")
 
 
+# ---------------------------------------------------------------------------
+#  Type sentinels for DSL lambda defaults
+# ---------------------------------------------------------------------------
+# These are placeholder objects used as type markers in lambda signatures.
+# They are never evaluated, only used as default values in the DSL.
+# Students can redefine them if desired.
+
+e = object()       # entity type marker
+t = object()       # truth value type marker
+et = object()      # e → t
+eet = object()     # e → (e → t)
+et_t = object()    # (e → t) → t
+et_et_t = object() # (e → t) → ((e → t) → t)
+tt = object()      # t → t
+ttt = object()     # t → (t → t)
+
+__all__ = [
+    "Type",
+    "takes",
+    "e",
+    "t",
+    "et",
+    "eet",
+    "et_t",
+    "et_et_t",
+    "tt",
+    "ttt",
+]
+
+
 if __name__ == "__main__":
   _run_tests()

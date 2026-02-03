@@ -6,6 +6,7 @@ Ultra‑light DSL for `PhiValue` literals in IPython / Colab.
 * Type a single back‑tick `` ` `` followed by any Python expression.
 * A token transformer replaces that back‑tick with ``lambda φ:``.
 * An AST transformer turns ``lambda φ: BODY`` into ``PhiValue(<AST of BODY>)``.
+* Alternate syntax using subscript notation: ``φ[EXPR]``, ``phi[EXPR]``, ``qq[EXPR]`` etc
 
 Why it works
 ============
@@ -15,6 +16,7 @@ captured as the body; no closing delimiter is needed.
 
 import ast
 import tokenize
+from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable
 
@@ -28,8 +30,34 @@ from p4s.core.phivalue import PhiValue
 # ---------------------------------------------------------------------------
 
 PHI_NAME = "φ"   # single arg name for injected lambda
-PHI_SUBSCRIPT_NAMES = {"phi", "ϕ", "qq"}
 BACKTICK = "`"  # trigger character
+
+@dataclass(frozen=True, slots=True)
+class PhiSubscriptPrefix:
+  """Lightweight marker object for phi-style DSL prefixes (e.g., φ[EXPR])."""
+  name: str
+
+  def __repr__(self) -> str:
+    return f"PhiSubscriptPrefix(name={self.name!r})"
+
+phi = PhiSubscriptPrefix("phi")
+ϕ = PhiSubscriptPrefix("ϕ")
+qq = PhiSubscriptPrefix("qq")
+φ = PhiSubscriptPrefix("φ")
+ɸ = PhiSubscriptPrefix("ɸ")
+
+PHI_SUBSCRIPT_PREFIXES = {p.name: p for p in (phi, ϕ, qq, φ, ɸ)}
+PHI_SUBSCRIPT_NAMES = set(PHI_SUBSCRIPT_PREFIXES)
+
+__all__ = [
+  "PHI_SUBSCRIPT_NAMES",
+  "PhiSubscriptPrefix",
+  "phi",
+  "ϕ",
+  "qq",
+  "φ",
+  "ɸ",
+]
 
 # ---------------------------------------------------------------------------
 # 1. token‑level transformer  –   `` ` `` → tokens for ``lambda φ:``
@@ -55,7 +83,7 @@ def backtick_token_transform(tokens: Iterable[tokenize.TokenInfo]):
 
 
 # ---------------------------------------------------------------------------
-# 2. AST transformer – lambda φ: BODY  →  PhiValue(<AST of BODY>)
+# 2. AST transformer – lambda φ: BODY and subscripts →  PhiValue(<AST of BODY>)
 # ---------------------------------------------------------------------------
 
 class PhiValueASTTransformer(ast.NodeTransformer):
