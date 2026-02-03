@@ -5,8 +5,8 @@ Bottom‑up compositional interpreter à la Heim & Kratzer.
 
 Rules
 ~~~~~
-A rule is a callable whose **first positional** parameter is the syntax
-node currently being interpreted (a ``Tree`` or a leaf token).  The
+A rule is a callable whose **first positional** parameter (alpha) is the syntax
+node currently being interpreted (a ``Tree`` or a leaf token). The
 remaining positional parameters receive the *non‑vacuous* meanings of the
 node’s children.
 
@@ -28,6 +28,7 @@ Logging (``logging.DEBUG``)
 """
 
 import logging
+from functools import wraps
 from inspect import Parameter, signature
 from typing import Any, Callable, Mapping
 
@@ -80,7 +81,14 @@ class Interpreter:
     """Decorator: ``@interp.rule`` registers *fn* as a rule."""
     if fn is None:
       return lambda f: self.rule(f, index=index)
-    self.add_rule(fn, index=index)
+    
+    # Wrap fn to convert None returns to UNDEF
+    @wraps(fn)
+    def wrapped_rule(node, *child_args):
+      result = fn(node, *child_args)
+      return UNDEF if result is None else result
+    
+    self.add_rule(wrapped_rule, index=index)
     return fn
 
   # ――― public API ――――――――――――――――――――――――――――――――
@@ -89,6 +97,11 @@ class Interpreter:
     if extra_args and callable(val):
       return val(*extra_args)
     return val
+
+  def __getitem__(self, item):
+    if isinstance(item, str):
+      return self.lookup(item)
+    return self.interpret(item)
 
   # ――― core recursive worker ――――――――――――――――――――――
   def _compute(self, node):
@@ -122,6 +135,7 @@ class Interpreter:
       if val is not UNDEF:
         try:
           node.sem = val
+          node.rule = rule
         except: pass
         return val
 
@@ -134,17 +148,18 @@ class Interpreter:
   # ――― safe rule invocation ――――――――――――――――――――――
   @staticmethod
   def _try_rule(rule: Callable, node, child_args: list[Any]):
-    """Attempt to apply *rule* to *child_args* and optional *alpha=node* keyword."""
-    # 1. Arity check based on positional parameters only
+    """Attempt to apply *rule* to *alpha=node* followed by *child_args*."""
+    # 1. Arity check: rule expects 1 + len(child_args) positional arguments
     try:
       sig = signature(rule)
       params = list(sig.parameters.values())
       fixed_pos = [p for p in params if p.kind in (Parameter.POSITIONAL_ONLY,
                                                    Parameter.POSITIONAL_OR_KEYWORD)]
       has_var_pos = any(p.kind == Parameter.VAR_POSITIONAL for p in params)
+      expected_args = 1 + len(child_args)  # 1 for alpha + children
       min_needed = sum(1 for p in fixed_pos if p.default is Parameter.empty)
       max_allowed = float('inf') if has_var_pos else len(fixed_pos)
-      if not (min_needed <= len(child_args) <= max_allowed):
+      if not (min_needed <= expected_args <= max_allowed):
         lbl = node.label() if isinstance(node, Tree) else str(node)
         logger.debug("Arity mismatch for rule %s on node %s", rule.__name__, lbl)
         return UNDEF
@@ -152,18 +167,9 @@ class Interpreter:
       # Could not introspect; assume it might work
       pass
 
-    # 2. Determine whether to pass alpha as keyword
-    kwargs: dict[str, Any] = {}
+    # 2. Call the rule with alpha as first positional arg, followed by child_args
     try:
-      sig = signature(rule)
-      if 'alpha' in sig.parameters:
-        kwargs['alpha'] = node
-    except (TypeError, ValueError):
-      pass
-
-    # 3. Call the rule with only child_args and optional alpha kwarg
-    try:
-      return rule(*child_args, **kwargs)
+      return rule(node, *child_args)
     except Exception as exc:
       logger.debug("Rule %s raised %s", rule.__name__, exc)
       return UNDEF

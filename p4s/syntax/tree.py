@@ -85,7 +85,14 @@ def split_with_sem(node):
   # 2) Build inline badge next to the syntactic label
   typ = getattr(sem, 'stype', None)
   badge_html = make_badge_html(typ, font_size='11px') if typ else ''
-  first_line = f"<span>{label} {badge_html}</span>"
+  rule = getattr(node, 'rule', None)
+  rule_name = getattr(rule, '__name__', str(rule)) if rule else ''
+  rule_badge = (
+    f"<span class='phi-badge' style='font-size:10px;background:#e0e0e0;'>"
+    f"{html.escape(rule_name)}</span>"
+    if rule_name else ''
+  )
+  first_line = f"<span>{label} {badge_html} {rule_badge}</span>"
 
   # 3) Pretty-print code with Black at a narrower line length for trees
   expr = getattr(sem, 'expr', None)
@@ -144,6 +151,14 @@ class Leaf(str):
   def sem(self, value):
     self._sem = value
 
+  @property
+  def rule(self):
+    return getattr(self, '_rule', None)
+
+  @rule.setter
+  def rule(self, value):
+    self._rule = value
+
 class Tree(_NLTKTree):
   """
   A syntax node that can cache a semantic value and render nicely.
@@ -152,16 +167,17 @@ class Tree(_NLTKTree):
       sem (PhiValue | None): semantic value attached by interpretation.
   """
 
-  __slots__ = ("sem",)
+  __slots__ = ("sem", "rule")
   __match_args__ = ("_label", "children")
   @property
   def children(self): return list(self)
 
-  def __init__(self, label, children=(), *, sem: PhiValue | None = None):
+  def __init__(self, label, children=(), *, sem: PhiValue | None = None, rule: object | None = None):
     # Initialize as an nltk.Tree with given label and children
     super().__init__(label, children)
     # Semantic value (to be filled by Interpreter)
     self.sem = sem
+    self.rule = rule
 
   @classmethod
   def fromstring(cls, s: str, **kwargs) -> Tree:
@@ -174,6 +190,7 @@ class Tree(_NLTKTree):
     t = super().fromstring(s, read_leaf=leaf_to_tree, **kwargs)
     t.__class__ = cls
     t.sem = getattr(t, 'sem', None)
+    t.rule = getattr(t, 'rule', None)
     return t
 
   def _xrepr_html_(self) -> str:
