@@ -109,7 +109,12 @@ class Interpreter:
     if isinstance(tree, Tree):
       display(tree)
     if extra_args and callable(val):
-      return val(*extra_args)
+      val = val(*extra_args)
+
+    try:
+      val = val.eval()
+    except: 
+      pass
     return val
 
   def __getitem__(self, item):
