@@ -104,7 +104,15 @@ class PhiValueASTTransformer(ast.NodeTransformer):
 
   def visit_Subscript(self, node: ast.Subscript):  # noqa: N802
     if isinstance(node.value, ast.Name) and node.value.id in PHI_SUBSCRIPT_NAMES:
-      slice_src = ast.unparse(node.slice)
+      # Determine the expression source based on slice type
+      match node.slice:
+        case ast.Slice(lower=expr, upper=type_spec, step=None) if expr is not None and type_spec is not None:
+          # qq[expr : type] → PhiValue("(expr).type")
+          slice_src = f"({ast.unparse(expr)}).{ast.unparse(type_spec)}"
+        case _:
+          # qq[expr] → PhiValue("expr")
+          slice_src = ast.unparse(node.slice)
+
       new_call = ast.Call(
         func=ast.Name(id="PhiValue", ctx=ast.Load()),
         args=[ast.Constant(value=slice_src)],
