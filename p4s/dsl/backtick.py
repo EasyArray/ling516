@@ -106,7 +106,7 @@ class PhiValueASTTransformer(ast.NodeTransformer):
     if isinstance(node.value, ast.Name) and node.value.id in PHI_SUBSCRIPT_NAMES:
       # Determine the expression source based on slice type
       match node.slice:
-        case ast.Slice(lower=expr, upper=type_spec, step=None) if expr is not None and type_spec is not None:
+        case ast.Slice(lower=expr, upper=None, step=type_spec) if None not in (expr, type_spec):
           # qq[expr : type] → PhiValue("(expr).type")
           slice_src = f"({ast.unparse(expr)}).{ast.unparse(type_spec)}"
         case _:
