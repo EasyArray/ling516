@@ -32,6 +32,8 @@ from functools import wraps
 from inspect import Parameter, signature
 from typing import Any, Callable, Mapping
 
+from IPython.display import display
+
 from p4s.syntax.tree import Tree
 from p4s.core.phivalue import PhiValue
 from p4s.core.constants import UNDEF, VACUOUS
@@ -93,15 +95,31 @@ class Interpreter:
 
   # ――― public API ――――――――――――――――――――――――――――――――
   def interpret(self, tree: Tree, *extra_args):
+    match tree:
+      case str() if tree.startswith('('):
+        tree = Tree.fromstring(tree)
+
+      case Tree():
+        pass
+      
+      case [*_]:
+        tree = Tree.fromlist(tree)
+
     val = self._compute(tree)
+    if isinstance(tree, Tree):
+      display(tree)
     if extra_args and callable(val):
       return val(*extra_args)
     return val
 
   def __getitem__(self, item):
-    if isinstance(item, str):
+    if isinstance(item, str) and not item.startswith('('):
       return self.lookup(item)
     return self.interpret(item)
+
+  def __setitem__(self, key, value):
+    if isinstance(key, str):
+      self.lexicon[key] = value
 
   # ――― core recursive worker ――――――――――――――――――――――
   def _compute(self, node):
