@@ -65,7 +65,7 @@ class Interpreter:
                lexicon: Mapping[str, Any] | None = None,
                *,
                rules: list[Callable] | None = None) -> None:
-    self.lexicon: dict[str, Any] = dict(lexicon or {})
+    self.lexicon: dict[str, Any] = {k.lower(): v for k, v in (lexicon or {}).items()}
     self.rules: list[Callable] = list(rules or [])
 
   # ――― helpers ――――――――――――――――――――――――――――――――――――
