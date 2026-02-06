@@ -248,6 +248,7 @@ t = object()       # truth value type marker
 et = object()      # e → t
 eet = object()     # e → (e → t)
 et_t = object()    # (e → t) → t
+et_et = object() # (e → t) → (e → t)
 et_et_t = object() # (e → t) → ((e → t) → t)
 tt = object()      # t → t
 ttt = object()     # t → (t → t)

@@ -174,6 +174,11 @@ class BetaReducer(SimplifyPass):
 
       body_copy = deepcopy(lam.body)
       new_body = _NameSubstituter(subst_map).visit(body_copy)
+      # Preserve type annotation from the Call node
+      if hasattr(node, 'stype'):
+        new_body.stype = node.stype
+      if hasattr(node, 'guard'):
+        new_body.guard = node.guard
       return new_body
 
     # ------------------------------------------------------------------
@@ -185,6 +190,11 @@ class BetaReducer(SimplifyPass):
 
     func_copy = deepcopy(node.func)
     func_copy = _NameSubstituter(kw_bindings).visit(func_copy)
+    # Preserve type annotation from the Call node
+    if hasattr(node, 'stype'):
+      func_copy.stype = node.stype
+    if hasattr(node, 'guard'):
+      func_copy.guard = node.guard
     return func_copy
   
   # ------------------------------------------------------------------
@@ -201,4 +211,10 @@ class BetaReducer(SimplifyPass):
 
     lam_copy = deepcopy(lam)
     subst_map = dict(zip(params, node.args))
-    return _NameSubstituter(subst_map).visit(lam_copy.body)
+    result = _NameSubstituter(subst_map).visit(lam_copy.body)
+    # Preserve type annotation from the Call node
+    if hasattr(node, 'stype'):
+      result.stype = node.stype
+    if hasattr(node, 'guard'):
+      result.guard = node.guard
+    return result

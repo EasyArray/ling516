@@ -144,6 +144,9 @@ class _Infer(ast.NodeTransformer):
   # -------------------------------------------------------------------
 
   def visit_Call(self, node: ast.Call):
+    # Check if type was already explicitly set (e.g., via attribute notation)
+    explicit_stype = getattr(node, "stype", None)
+    
     node = self.generic_visit(node)
 
     # ---------- type inference (unchanged) ----------------------------
@@ -166,7 +169,11 @@ class _Infer(ast.NodeTransformer):
       elif arg_t and arg_t != dom:
         LOG.warning("Type mismatch: expected %s, got %s in %s",
                     fn_t.domain, arg_t, ast.unparse(node))
-      node.stype = fn_t.range
+      # Only set inferred type if no explicit type was provided
+      if explicit_stype is None:
+        node.stype = fn_t.range
+      else:
+        node.stype = explicit_stype
 
     # ---------- guard propagation ------------------------------------
     fn_guard  = getattr(node.func, "guard", None)
