@@ -112,10 +112,12 @@ class Interpreter:
       val = val(*extra_args)
 
     try:
-      val = val.eval()
+      out = val.eval()
+      if callable(out):
+        out = val
     except: 
-      pass
-    return val
+      out = val
+    return out
 
   def __getitem__(self, item):
     if isinstance(item, str) and not item.startswith('('):
