@@ -65,7 +65,9 @@ class Interpreter:
                lexicon: Mapping[str, Any] | None = None,
                *,
                rules: list[Callable] | None = None) -> None:
-    self.lexicon: dict[str, Any] = {k.lower(): v for k, v in (lexicon or {}).items()}
+    self.lexicon: dict[str, Any] = {}
+    for k, v in (lexicon or {}).items():
+      self[k] = v
     self.rules: list[Callable] = list(rules or [])
 
   # ――― helpers ――――――――――――――――――――――――――――――――――――
@@ -126,7 +128,12 @@ class Interpreter:
 
   def __setitem__(self, key, value):
     if isinstance(key, str):
-      self.lexicon[key] = value
+      self.lexicon[key.lower()] = value
+
+  def update(self, mapping: Mapping[str, Any]):
+    """Bulk‑add entries to the lexicon."""
+    for k, v in mapping.items():
+      self[k] = v
 
   # ――― core recursive worker ――――――――――――――――――――――
   def _compute(self, node):
