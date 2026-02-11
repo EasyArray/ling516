@@ -101,7 +101,10 @@ class PhiValue:
     # Python's eval requires a real dict for globals
     env_dict = dict(self._env)
     code = compile(ast.Expression(self.expr), filename="<phivalue>", mode="eval")
-    return eval(code, env_dict)
+    out = eval(code, env_dict)
+    if self.stype == Type.t:
+      out = int(bool(out))
+    return out
 
   # ---------------------------------------------------------------------
   #  dunder utilities
