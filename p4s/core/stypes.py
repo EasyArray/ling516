@@ -247,8 +247,9 @@ e = object()       # entity type marker
 t = object()       # truth value type marker
 et = object()      # e → t
 eet = object()     # e → (e → t)
+eeet = object()    # e → (e → (e → t))
 et_t = object()    # (e → t) → t
-et_et = object() # (e → t) → (e → t)
+et_et = object()   # (e → t) → (e → t)
 et_et_t = object() # (e → t) → ((e → t) → t)
 tt = object()      # t → t
 ttt = object()     # t → (t → t)
@@ -260,7 +261,9 @@ __all__ = [
     "t",
     "et",
     "eet",
+    "eeet",
     "et_t",
+    "et_et",
     "et_et_t",
     "tt",
     "ttt",
