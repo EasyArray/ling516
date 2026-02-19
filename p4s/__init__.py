@@ -39,7 +39,7 @@ class Predicate(set):
 def charset(f, domain = None):
   if domain is None:
     domain = DOMAIN
-  return {c for c in domain if PV('f(c)', lambda:f(c))}
+  return {c for c in domain if f(c)}
 
 def iota(f, domain = None):
   return tuple(charset(f,domain))[0]
