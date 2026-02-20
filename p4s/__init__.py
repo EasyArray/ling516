@@ -41,6 +41,13 @@ def charset(f, domain = None):
     domain = DOMAIN
   return {c for c in domain if f(c)}
 
+def singular(f, domain = None):
+  if domain is None:
+    domain = DOMAIN
+  if hasattr(f, 'stype') and f.stype != Type.et:
+    return False
+  return sum(f(x) for x in domain) == 1
+
 def iota(f, domain = None):
   return tuple(charset(f,domain))[0]
 
