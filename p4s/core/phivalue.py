@@ -65,7 +65,7 @@ class PhiValue:
   #  functional behaviour
   # ---------------------------------------------------------------------
 
-  def __call__(self, *args: "PhiValue", **kwargs) -> "PhiValue":
+  def __call__(self, *args: "PhiValue", **kwargs) -> Any:
     # Convert basic types to PhiValues
     args = tuple(PhiValue(a) if not isinstance(a, PhiValue) else a for a in args)
     kwargs = {k: PhiValue(v) if not isinstance(v, PhiValue) else v for k, v in kwargs.items()}
@@ -85,11 +85,12 @@ class PhiValue:
     phi = PhiValue(call_ast)
     try:
       result = phi.eval()
-      # Keep lambda-like results as PhiValue for rich display
-      if callable(result):
+      # Keep Python callables (e.g., lambda/function objects) as unevaluated
+      # PhiValue for readable display, but return evaluated PhiValue results.
+      if callable(result) and not isinstance(result, PhiValue):
         return phi
       return result
-    except:
+    except Exception:
       return phi
 
   # ---------------------------------------------------------------------
