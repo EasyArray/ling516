@@ -263,6 +263,7 @@ __all__ = [
     "et",
     "eet",
     "eeet",
+    "et_e",
     "et_t",
     "et_et",
     "et_et_t",
