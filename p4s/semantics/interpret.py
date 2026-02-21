@@ -228,7 +228,8 @@ class Interpreter:
 
     # 2. Call the rule with alpha as first positional arg, followed by child_args
     try:
-      return rule(node, *child_args)
+      result = rule(node, *child_args)
+      return UNDEF if result is None else result
     except Exception as exc:
       logger.debug("Rule %s raised %s", rule.__name__, exc)
       return UNDEF
