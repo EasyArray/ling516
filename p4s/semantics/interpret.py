@@ -142,6 +142,16 @@ class Interpreter:
 
     try:
       out = val.eval()
+      seen: set[int] = set()
+      while isinstance(out, PhiValue):
+        ident = id(out)
+        if ident in seen:
+          break
+        seen.add(ident)
+        nxt = out.eval()
+        if nxt is out:
+          break
+        out = nxt
       if callable(out):
         out = val
     except Exception:
