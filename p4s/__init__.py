@@ -7,7 +7,7 @@ natural language semantics in the style of Heim & Kratzer (1998)."""
 from string import ascii_uppercase
 from IPython import get_ipython
 
-from .semantics.interpret import Interpreter, defined
+from .semantics.interpret import Interpreter, defined, rule
 from .syntax.tree import Tree
 from .core.phivalue import PhiValue
 from .core.stypes import *
