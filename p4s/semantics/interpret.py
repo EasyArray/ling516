@@ -42,7 +42,15 @@ from p4s.core.constants import UNDEF, VACUOUS
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-__all__ = ["Interpreter", "defined"]
+__all__ = ["Interpreter", "defined", "rule"]
+
+def rule(fn: Callable | None = None, *, index: int | None = None):
+  """Mark an Interpreter method for auto-registration on instance init."""
+  if fn is None:
+    return lambda f: rule(f, index=index)
+  setattr(fn, "__interp_rule__", True)
+  setattr(fn, "__interp_rule_index__", index)
+  return fn
 
 # ——————————————————————————————————————————————
 # Helpers
@@ -68,7 +76,40 @@ class Interpreter:
     self.lexicon: dict[str, Any] = {}
     for k, v in (lexicon or {}).items():
       self[k] = v
+
     self.rules: list[Callable] = list(rules or [])
+    if rules is None:
+      self._register_marked_rules()
+
+  def _register_marked_rules(self) -> None:
+    """Register @rule-marked methods from base classes + subclass."""
+    specs: dict[str, int | None] = {}
+    order: list[str] = []
+
+    # base -> subclass (stable order, subclass can override index)
+    for cls in reversed(type(self).__mro__[:-1]):  # skip object
+      for name, obj in cls.__dict__.items():
+        if callable(obj) and getattr(obj, "__interp_rule__", False):
+          if name not in specs:
+            order.append(name)
+          specs[name] = getattr(obj, "__interp_rule_index__", None)
+
+    for name in order:
+      # bound method: self already attached
+      self.add_rule(getattr(self, name), index=specs[name])
+
+  def rule(self, fn: Callable | None = None, *, index: int | None = None):
+    """Decorator: @interp.rule() registers a post-init function rule."""
+    if fn is None:
+      return lambda f: self.rule(f, index=index)
+
+    @wraps(fn)
+    def wrapped_rule(node, *child_args):
+      result = fn(node, *child_args)
+      return UNDEF if result is None else result
+
+    self.add_rule(wrapped_rule, index=index)
+    return fn
 
   # ――― helpers ――――――――――――――――――――――――――――――――――――
   def lookup(self, word: str):
@@ -80,20 +121,6 @@ class Interpreter:
       self.rules.append(fn)
     else: 
       self.rules.insert(index or 0, fn)
-
-  def rule(self, fn: Callable | None = None, *, index: int | None = None):
-    """Decorator: ``@interp.rule`` registers *fn* as a rule."""
-    if fn is None:
-      return lambda f: self.rule(f, index=index)
-    
-    # Wrap fn to convert None returns to UNDEF
-    @wraps(fn)
-    def wrapped_rule(node, *child_args):
-      result = fn(node, *child_args)
-      return UNDEF if result is None else result
-    
-    self.add_rule(wrapped_rule, index=index)
-    return fn
 
   # ――― public API ――――――――――――――――――――――――――――――――
   def interpret(self, tree: Tree, *extra_args):
