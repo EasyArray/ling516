@@ -14,6 +14,7 @@ Rules
 * ``defined(φ % ψ)``        →  ``ψ``
 * ``defined(...)``    →  ``True`` otherwise
 * ``(fn % G)(arg)`` →  ``(fn)(arg) % G``
+* ``f(..., (a % G), ...)`` → ``f(..., a, ...) % G``
 
 This pass should run *after* macro‑expansion and beta‑reduction, and
 before any static checks of undefinedness.
@@ -22,13 +23,36 @@ before any static checks of undefinedness.
 from __future__ import annotations
 
 import ast
-from collections import deque
 
 from p4s.core.constants import UNDEF   # sentinel for undefined values
 from .passes import SimplifyPass   # base class provides .env (ChainMap)
 
 # sentinel name for undefined
 UNDEF_NAME = str(UNDEF)
+
+
+def _free_vars(node: ast.AST, bound: set[str] | None = None) -> set[str]:
+  """Collect free variable names in *node* (Load context only)."""
+  if bound is None:
+    bound = set()
+
+  match node:
+    case ast.Name(id=name, ctx=ast.Load()):
+      return set() if name in bound else {name}
+    case ast.Lambda(args=args, body=body):
+      inner_bound = set(bound)
+      inner_bound.update(a.arg for a in args.args)
+      inner_bound.update(a.arg for a in args.kwonlyargs)
+      if args.vararg is not None:
+        inner_bound.add(args.vararg.arg)
+      if args.kwarg is not None:
+        inner_bound.add(args.kwarg.arg)
+      return _free_vars(body, inner_bound)
+    case _:
+      out: set[str] = set()
+      for child in ast.iter_child_nodes(node):
+        out.update(_free_vars(child, bound))
+      return out
 
 # ---------------------------------------------------------------------------
 # GuardFolder pass
@@ -43,6 +67,13 @@ class GuardFolder(SimplifyPass):
     ("defined(phi % psi)",   "psi"),
     ("(phi % psi) is not UNDEF", "psi"),
     ("defined(lambda x: x)", "True"),  # New test for defined(lambda...)
+    ("f(x % g)", "f(x) % g"),
+    (
+      "KILLED(x, iota(z) % singular(z))",
+      "KILLED(x, iota(z)) % singular(z)",
+    ),
+    ("lambda x: p(x) % g", "(lambda x: p(x)) % g"),
+    ("iota(lambda x: p(x) % g)", "iota(lambda x: p(x)) % g"),
   ]
 
   TEST_ENV = {
@@ -97,8 +128,64 @@ class GuardFolder(SimplifyPass):
     return node
 
   # ---------- defined(φ % ψ)  →  ψ ---------------------------------
+  def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
+    self.generic_visit(node)
+
+    match node.body:
+      case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
+        bound = {a.arg for a in node.args.args}
+        bound.update(a.arg for a in node.args.kwonlyargs)
+        if node.args.vararg is not None:
+          bound.add(node.args.vararg.arg)
+        if node.args.kwarg is not None:
+          bound.add(node.args.kwarg.arg)
+
+        # Only hoist if the guard does not depend on lambda-bound vars.
+        if not (_free_vars(rhs) & bound):
+          return ast.BinOp(
+            left=ast.Lambda(args=node.args, body=lhs),
+            op=ast.Mod(),
+            right=rhs,
+          )
+
+    return node
+
+  # ---------- defined(φ % ψ)  →  ψ ---------------------------------
   def visit_Call(self, node: ast.Call) -> ast.AST:
     self.generic_visit(node)
+
+    guards: list[ast.AST] = []
+    new_args: list[ast.AST] = []
+    changed = False
+
+    for arg in node.args:
+      match arg:
+        case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
+          new_args.append(lhs)
+          guards.append(rhs)
+          changed = True
+        case _:
+          new_args.append(arg)
+
+    new_keywords: list[ast.keyword] = []
+    for kw in node.keywords:
+      if kw.arg is None:
+        new_keywords.append(kw)
+        continue
+
+      match kw.value:
+        case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
+          new_keywords.append(ast.keyword(arg=kw.arg, value=lhs))
+          guards.append(rhs)
+          changed = True
+        case _:
+          new_keywords.append(kw)
+
+    if changed:
+      node = ast.Call(func=node.func, args=new_args, keywords=new_keywords)
+      for guard in guards:
+        node = ast.BinOp(left=node, op=ast.Mod(), right=guard)
+      return node
 
     match node:
       case ast.Call(
@@ -148,35 +235,48 @@ class RemoveDuplicateGuards(SimplifyPass):
     (A % G1 % G2) % G1 → A % G1 % G2
   """
 
-  # we keep a stack of *keys* for the guards that dominate the
-  # current traversal position
-  def __init__(self, env=None):
-    super().__init__(env)
-    self._active: deque[str] = deque()
+  TESTS = [
+    ("(A % G) % G", "A % G"),
+    ("A % (G1 % G2)", "(A % G1) % G2"),
+    ("(A % G1) % (G2 % G1)", "(A % G1) % G2"),
+  ]
 
-  # ---------- helper ------------------------------------------------
-  def _is_redundant(self, guard: ast.AST) -> bool:
-    return guard_key(guard) in self._active
+  def _collect_chain(self, node: ast.AST) -> tuple[ast.AST, list[ast.AST]]:
+    """Return (payload, guards) where guards are in application order."""
+    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Mod):
+      return node, []
+
+    payload, guards = self._collect_chain(node.left)
+    rhs_payload, rhs_guards = self._collect_chain(node.right)
+
+    # right can itself be a guard-chain produced by earlier rewrites
+    guards.append(rhs_payload)
+    guards.extend(rhs_guards)
+    return payload, guards
+
+  @staticmethod
+  def _rebuild_chain(payload: ast.AST, guards: list[ast.AST]) -> ast.AST:
+    out = payload
+    for guard in guards:
+      out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
+    return out
 
   # ---------- core visitor ------------------------------------------
   def visit_BinOp(self, node: ast.BinOp):
-    # only interested in `%`
-    match node:
-      case ast.BinOp(op=ast.Mod()):
-        # (1) First simplify the *guard* expression on the right
-        node.right = self.visit(node.right)
+    node = self.generic_visit(node)
 
-        # (2) Check redundancy
-        key = guard_key(node.right)
-        if key in self._active:
-          # drop the whole “… % guard”
-          return self.visit(node.left)
+    if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod)):
+      return node
 
-        # (3) Keep it and recurse into the left with guard active
-        self._active.append(key)
-        node.left = self.visit(node.left)
-        self._active.pop()
-        return node
+    payload, guards = self._collect_chain(node)
 
-      case _:
-        return self.generic_visit(node)
+    seen: set[str] = set()
+    unique_guards: list[ast.AST] = []
+    for guard in guards:
+      key = guard_key(guard)
+      if key in seen:
+        continue
+      seen.add(key)
+      unique_guards.append(guard)
+
+    return self._rebuild_chain(payload, unique_guards)
