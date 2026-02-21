@@ -144,8 +144,8 @@ class Interpreter:
       out = val.eval()
       if callable(out):
         out = val
-    except: 
-      out = val
+    except Exception:
+      out = UNDEF if isinstance(val, PhiValue) else val
     return out
 
   def __getitem__(self, item):

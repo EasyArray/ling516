@@ -99,10 +99,64 @@ class PhiValue:
 
   def eval(self) -> Any:
     """Evaluate the stored expression in its captured environment."""
+    class _GuardModToIfExp(ast.NodeTransformer):
+      def visit_BinOp(self, node: ast.BinOp):
+        left_was_guard = isinstance(node.left, ast.BinOp) and isinstance(node.left.op, ast.Mod)
+        node = self.generic_visit(node)
+        if isinstance(node.op, ast.Mod):
+          if not left_was_guard:
+            return ast.IfExp(
+              test=node.right,
+              body=node.left,
+              orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+            )
+
+          lhs_name = "__guard_lhs"
+          lhs_ref = ast.Name(id=lhs_name, ctx=ast.Load())
+          undef_ref = ast.Name(id=str(UNDEF), ctx=ast.Load())
+          return ast.Call(
+            func=ast.Lambda(
+              args=ast.arguments(
+                posonlyargs=[],
+                args=[ast.arg(arg=lhs_name)],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+                vararg=None,
+                kwarg=None,
+              ),
+              body=ast.IfExp(
+                test=ast.Compare(
+                  left=lhs_ref,
+                  ops=[ast.Is()],
+                  comparators=[undef_ref],
+                ),
+                body=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+                orelse=ast.IfExp(
+                  test=node.right,
+                  body=lhs_ref,
+                  orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+                ),
+              ),
+            ),
+            args=[node.left],
+            keywords=[],
+          )
+        return node
+
     # Python's eval requires a real dict for globals
     env_dict = dict(self._env)
-    code = compile(ast.Expression(self.expr), filename="<phivalue>", mode="eval")
+    expr = self.expr
+    if any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.Mod)
+           for n in ast.walk(self.expr)):
+      expr = copy.deepcopy(self.expr)
+      expr = _GuardModToIfExp().visit(expr)
+      ast.fix_missing_locations(expr)
+
+    code = compile(ast.Expression(expr), filename="<phivalue>", mode="eval")
     out = eval(code, env_dict)
+    if out is UNDEF:
+      return UNDEF
     if self.stype == Type.t:
       out = int(bool(out))
     return out
