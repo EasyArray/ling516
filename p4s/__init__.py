@@ -48,14 +48,19 @@ def singular(f, domain = None):
     return False
   return sum(f(x) for x in domain) == 1
 
+def empty(f, domain = None):
+  if domain is None:
+    domain = DOMAIN
+  return not any(f(x) for x in domain)
+
 def iota(f, domain = None):
   return tuple(charset(f,domain))[0]
 
 def single(s):
   return len(s)==1
 
-def empty(s):
-  return len(s)==0
+#def empty(s):
+#  return len(s)==0
 
 
 # Splash screen
