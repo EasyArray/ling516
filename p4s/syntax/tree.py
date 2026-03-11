@@ -55,8 +55,8 @@ def xsplit_with_sem(node):
 
 def _label_to_html(label: str) -> str:
   if '_' in label:
-      base, sub = label.split('_', 1)
-      label = f"{html.escape(base)}<sub>{html.escape(sub)}</sub>"
+    base, sub = label.split('_', 1)
+    label = f"{html.escape(base)}<sub>{html.escape(sub)}</sub>"
   else:
     label = html.escape(label)
   return f"<span>{label}</span>"
@@ -213,10 +213,19 @@ class Tree(_NLTKTree):
     a <div>…</div> that Jupyter will render as HTML.
     """
   
-    return svh.draw_tree(
+    html_out = svh.draw_tree(
       self,
       tree_split=split_with_sem,
       vert_align=VertAlign.CENTER,
-      #average_glyph_width=0.6,     # default is 2.0  →  25 % wider slots
+      #average_glyph_width=0.6,     # default is 2.0  →  25% wider slots
     )._to_html()
+
+    # Let the tree keep its natural width, and scroll if viewport is narrower.
+    return (
+      "<div style='margin-left:2.5ch;max-width:100%;overflow-x:auto;'>"
+      "<div style='display:inline-block;width:max-content;min-width:100%;'>"
+      f"{html_out}"
+      "</div>"
+      "</div>"
+    )
   

@@ -52,7 +52,7 @@ def inject_css():
   """Call this **once** (e.g. at package import) so every widget shares it."""
   global _css_injected
   if _css_injected:
-      return
+    return
   # Display the CSS block exactly once
   display(HTML(_CSS))
   _css_injected = True
