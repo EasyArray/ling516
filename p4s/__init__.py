@@ -25,6 +25,14 @@ DOMAIN = [PhiValue(repr(c), stype=Type.e) for c in ascii_uppercase]
 
 class Predicate(set):
   """A set of tuples representing a predicate."""
+  def __contains__(self, item):
+    # Use == (which honours PhiValue.__eq__) instead of hash-based set lookup,
+    # so that e.g. the string 'B' and PhiValue('B') are treated as the same individual.
+    # Also normalise bare individuals to 1-tuples so `'B' in BLACK` works like `('B',) in BLACK`.
+    if not isinstance(item, tuple):
+      item = (item,)
+    return any(item == tup for tup in set.__iter__(self))
+
   def __call__(self, *args):
     if any(a is None for a in args):
       return None
