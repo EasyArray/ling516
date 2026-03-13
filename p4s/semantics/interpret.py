@@ -59,7 +59,10 @@ def rule(fn: Callable | None = None, *, index: int | None = None):
 def defined(value: PhiValue) -> bool:
   """Check if a PhiValue is defined (not UNDEF)."""
   if isinstance(value, PhiValue):
-    return value.eval() is not UNDEF
+    try:
+      return value.eval() is not UNDEF
+    except:
+      return True
   return False
 
 # ——————————————————————————————————————————————
