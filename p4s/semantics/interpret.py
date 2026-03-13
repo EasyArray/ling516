@@ -32,7 +32,7 @@ from functools import wraps
 from inspect import Parameter, signature
 from typing import Any, Callable, Mapping
 
-from IPython.display import display
+from IPython.display import Markdown, display
 
 from p4s.syntax.tree import Tree
 from p4s.core.phivalue import PhiValue
@@ -159,7 +159,9 @@ class Interpreter:
         out = val
     except Exception:
       out = UNDEF if isinstance(val, PhiValue) else val
-    return out
+
+    display(Markdown(f"**Result:** `{out}`"))
+    return val
 
   def __getitem__(self, item):
     if isinstance(item, str) and not item.startswith('('):
