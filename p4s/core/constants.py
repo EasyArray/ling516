@@ -11,6 +11,8 @@ class _Sentinel:
     return self.name
   def _repr_html_(self):
     return f"<code>&lt;{self.name}&gt;</code>"
+  def __call__(self, *args, **kwds):  # to mimic some behaviors of PhiValues
+    return self
 
 UNDEF = _Sentinel("UNDEF")
 VACUOUS = _Sentinel("VACUOUS")
