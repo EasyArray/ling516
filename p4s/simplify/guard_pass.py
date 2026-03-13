@@ -92,6 +92,29 @@ class GuardFolder(SimplifyPass):
       pass
     return None
 
+  def _eval_defined(self, expr: ast.AST):
+    """Best-effort fold for defined(expr): return bool or None when unknown."""
+    try:
+      code = compile(ast.Expression(expr), filename="<ast>", mode="eval")
+      val = eval(code, self.env)
+      return val is not UNDEF
+    except Exception:
+      return None
+
+  def _is_definitely_undef(self, expr: ast.AST) -> bool:
+    """Return True when expr is statically known to be UNDEF."""
+    match expr:
+      case ast.Name(id=name, ctx=ast.Load()):
+        if name == UNDEF_NAME:
+          return True
+        return self.env.get(name, object()) is UNDEF
+      case ast.Call(func=ast.Name(id=fn_name, ctx=ast.Load())):
+        if fn_name == UNDEF_NAME:
+          return True
+        return self.env.get(fn_name, object()) is UNDEF
+      case _:
+        return False
+
   # ---------- φ % ψ  ------------------------------------------------
   def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
     self.generic_visit(node)
@@ -194,15 +217,19 @@ class GuardFolder(SimplifyPass):
         keywords=[],
       ):
         return rhs
-      
-      # defined(foo) → True if foo is not a BinOp %
-      # in the future may want to try to eval first
+
+      # Fold defined(expr) only when expr can be resolved statically.
       case ast.Call(
         func=ast.Name(id="defined", ctx=ast.Load()),
-#        args=[ast.Lambda()],
-#        keywords=[],
+        args=[arg],
+        keywords=[],
       ):
-        return ast.Constant(value=True)
+        if self._is_definitely_undef(arg):
+          return ast.Constant(value=False)
+        val = self._eval_defined(arg)
+        if val is not None:
+          return ast.Constant(value=val)
+        return node
       
       case ast.Call(
         func=ast.BinOp(left=lhs, op=ast.Mod(), right=rhs)
