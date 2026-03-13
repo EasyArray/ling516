@@ -155,8 +155,8 @@ class Interpreter:
         if nxt is out:
           break
         out = nxt
-      if callable(out):
-        out = val
+      # if callable(out):
+      #   out = val
     except Exception:
       out = UNDEF if isinstance(val, PhiValue) else val
 
