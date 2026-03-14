@@ -13,6 +13,7 @@ Rules
 * ``(φ % ψ) is not UNDEF``  →  ``ψ``
 * ``defined(φ % ψ)``        →  ``ψ``
 * ``defined(...)``          →  ``True`` / ``False`` when statically decidable
+* ``φ and (ψ % G)``         →  ``(φ and ψ) % G`` (conservative, conjunction only)
 * ``(fn % G)(arg)`` →  ``(fn)(arg) % G``
 * ``f(..., (a % G), ...)`` → ``f(..., a, ...) % G``
 
@@ -71,6 +72,10 @@ class GuardFolder(SimplifyPass):
     ("defined(MAN(J))", "True"),
     ("MAN(J) % defined(MAN(J))", "MAN(J)"),
     ("defined(iota(z))", "defined(iota(z))"),
+    ("phi and (psi % G)", "(phi and psi) % G"),
+    ("(phi % G) and psi", "(phi and psi) % G"),
+    ("(phi % G1) and (psi % G2)", "(phi and psi) % G1 % G2"),
+    ("G and (phi % G)", "(G and phi) % G"),
     ("f(x % g)", "f(x) % g"),
     (
       "KILLED(x, iota(z) % singular(z))",
@@ -186,6 +191,39 @@ class GuardFolder(SimplifyPass):
     return node
 
   # ---------- defined(φ % ψ)  →  ψ ---------------------------------
+  def visit_BoolOp(self, node: ast.BoolOp) -> ast.AST:
+    self.generic_visit(node)
+
+    # Hoist guards from top-level conjunction terms so duplicate guard
+    # elimination can see and collapse repeated guards.
+    #
+    # TODO: revisit with full presupposition projection/cancellation.
+    # For example, G and (phi % G) can cancel the guard, but we keep it
+    # for now and normalize to (G and phi) % G.
+    if not isinstance(node.op, ast.And):
+      return node
+
+    guards: list[ast.AST] = []
+    values: list[ast.AST] = []
+    changed = False
+
+    for value in node.values:
+      match value:
+        case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
+          values.append(lhs)
+          guards.append(rhs)
+          changed = True
+        case _:
+          values.append(value)
+
+    if not changed:
+      return node
+
+    out: ast.AST = ast.BoolOp(op=ast.And(), values=values)
+    for guard in guards:
+      out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
+    return out
+
   def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
     self.generic_visit(node)
 
