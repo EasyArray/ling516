@@ -4,9 +4,11 @@ from typing import List, Type
 from collections import ChainMap
 from .utils import is_literal
 import ast
+from p4s.core.constants import UNDEF
 
 # Sentinel for shadowing the environment in SimplifyPass
 _SHADOW = object()
+UNDEF_NAME = str(UNDEF)
 
 # ─────────────────────────────
 #  Base class
@@ -175,10 +177,16 @@ class BoolIdentityPruner(SimplifyPass):
     ("x or True", "True"),
     ("False or x", "x"),
     ("True or x", "True"),
+    (f"x and {UNDEF_NAME}", UNDEF_NAME),
+    (f"{UNDEF_NAME} and x", UNDEF_NAME),
   ]
   def visit_BoolOp(self, node: BoolOp):
     self.generic_visit(node)
     match node:
+      case BoolOp(op=And(), values=[Name(id=name), _]) if name == UNDEF_NAME:
+        return Name(id=UNDEF_NAME, ctx=Load())
+      case BoolOp(op=And(), values=[_, Name(id=name)]) if name == UNDEF_NAME:
+        return Name(id=UNDEF_NAME, ctx=Load())
       case BoolOp(op=And(), values=[Constant(value=True), rhs]):
         return rhs
       case BoolOp(op=And(), values=[lhs, Constant(value=True)]):
