@@ -223,7 +223,7 @@ class Tree(_NLTKTree):
     # Let the tree keep its natural width, and scroll if viewport is narrower.
     return (
       "<div style='margin-left:2.5ch;max-width:100%;overflow-x:auto;'>"
-      "<div style='display:inline-block;width:max-content;min-width:100%;'>"
+      "<div style='display:inline-block;width:max-content;min-width:100%;padding-left:8ch;box-sizing:border-box;'>"
       f"{html_out}"
       "</div>"
       "</div>"
