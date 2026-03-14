@@ -12,7 +12,7 @@ Rules
   boolean constant, fold as above (Option 1: cheap eval).
 * ``(φ % ψ) is not UNDEF``  →  ``ψ``
 * ``defined(φ % ψ)``        →  ``ψ``
-* ``defined(...)``    →  ``True`` otherwise
+* ``defined(...)``          →  ``True`` / ``False`` when statically decidable
 * ``(fn % G)(arg)`` →  ``(fn)(arg) % G``
 * ``f(..., (a % G), ...)`` → ``f(..., a, ...) % G``
 
@@ -62,11 +62,15 @@ class GuardFolder(SimplifyPass):
   """Fold `%`‑guard AST patterns into canonical forms (Option 1)."""
 
   TESTS = [
-    ("phi % False",          UNDEF_NAME),
-    ("phi % True",           "phi"),
-    ("defined(phi % psi)",   "psi"),
+    ("phi % False", UNDEF_NAME),
+    ("phi % True", "phi"),
+    ("defined(phi % psi)", "psi"),
     ("(phi % psi) is not UNDEF", "psi"),
-    ("defined(lambda x: x)", "True"),  # New test for defined(lambda...)
+    ("defined(lambda x: x)", "True"),
+    ("defined(defined(x))", "True"),
+    ("defined(MAN(J))", "True"),
+    ("MAN(J) % defined(MAN(J))", "MAN(J)"),
+    ("defined(iota(z))", "defined(iota(z))"),
     ("f(x % g)", "f(x) % g"),
     (
       "KILLED(x, iota(z) % singular(z))",
@@ -78,7 +82,6 @@ class GuardFolder(SimplifyPass):
 
   TEST_ENV = {
     'UNDEF': ast.Name(id=UNDEF_NAME, ctx=ast.Load()),
-    'defined': lambda x: x is not UNDEF,   # dummy; folded away
   }
 
   # ---------- helper: try static eval of RHS -----------------------
@@ -92,28 +95,60 @@ class GuardFolder(SimplifyPass):
       pass
     return None
 
-  def _eval_defined(self, expr: ast.AST):
-    """Best-effort fold for defined(expr): return bool or None when unknown."""
-    try:
-      code = compile(ast.Expression(expr), filename="<ast>", mode="eval")
-      val = eval(code, self.env)
-      return val is not UNDEF
-    except Exception:
-      return None
+  def _is_assumed_defined_name(self, name: str) -> bool | None:
+    """Return static definedness for bare names under the lexical assumptions."""
+    if name == UNDEF_NAME:
+      return False
+    if name in self.env:
+      return self.env.get(name) is not UNDEF
+    if name[:1].isupper():
+      return True
+    return None
 
-  def _is_definitely_undef(self, expr: ast.AST) -> bool:
-    """Return True when expr is statically known to be UNDEF."""
+  def _defined_status(self, expr: ast.AST) -> bool | None:
+    """Return True, False, or None for statically decidable definedness."""
     match expr:
       case ast.Name(id=name, ctx=ast.Load()):
-        if name == UNDEF_NAME:
-          return True
-        return self.env.get(name, object()) is UNDEF
-      case ast.Call(func=ast.Name(id=fn_name, ctx=ast.Load())):
+        return self._is_assumed_defined_name(name)
+
+      case ast.Constant():
+        return True
+
+      case ast.Lambda():
+        return True
+
+      case ast.Call(
+        func=ast.Name(id="defined", ctx=ast.Load()),
+        args=[_],
+        keywords=[],
+      ):
+        # defined(...) itself is total even when its argument is not.
+        return True
+
+      case ast.Call(
+        func=ast.Name(id=fn_name, ctx=ast.Load()),
+        args=args,
+        keywords=[],
+      ):
         if fn_name == UNDEF_NAME:
+          return False
+        if fn_name[:1].isupper() and all(self._defined_status(arg) is True for arg in args):
           return True
-        return self.env.get(fn_name, object()) is UNDEF
+        if fn_name in self.env and self.env.get(fn_name) is UNDEF:
+          return False
+        return None
+
+      case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
+        lhs_status = self._defined_status(lhs)
+        rhs_bool = self._eval_bool(rhs)
+        if lhs_status is False or rhs_bool is False:
+          return False
+        if lhs_status is True and rhs_bool is True:
+          return True
+        return None
+
       case _:
-        return False
+        return None
 
   # ---------- φ % ψ  ------------------------------------------------
   def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
@@ -173,9 +208,34 @@ class GuardFolder(SimplifyPass):
 
     return node
 
-  # ---------- defined(φ % ψ)  →  ψ ---------------------------------
+  # ---------- call rewrites and defined(...) folding ---------------
   def visit_Call(self, node: ast.Call) -> ast.AST:
     self.generic_visit(node)
+
+    match node:
+      case ast.Call(
+        func=ast.Name(id="defined", ctx=ast.Load()),
+        args=[ast.BinOp(op=ast.Mod(), right=rhs)],
+        keywords=[],
+      ):
+        return rhs
+
+      # Fold defined(expr) from static definedness, not just successful eval.
+      case ast.Call(
+        func=ast.Name(id="defined", ctx=ast.Load()),
+        args=[arg],
+        keywords=[],
+      ):
+        status = self._defined_status(arg)
+        if status is not None:
+          return ast.Constant(value=status)
+        return node
+
+      case ast.Call(
+        func=ast.BinOp(left=lhs, op=ast.Mod(), right=rhs)
+      ):
+        node.func = lhs
+        return ast.BinOp(left=node, op=ast.Mod(), right=rhs)
 
     guards: list[ast.AST] = []
     new_args: list[ast.AST] = []
@@ -210,33 +270,6 @@ class GuardFolder(SimplifyPass):
         node = ast.BinOp(left=node, op=ast.Mod(), right=guard)
       return node
 
-    match node:
-      case ast.Call(
-        func=ast.Name(id="defined", ctx=ast.Load()),
-        args=[ast.BinOp(op=ast.Mod(), right=rhs)],
-        keywords=[],
-      ):
-        return rhs
-
-      # Fold defined(expr) only when expr can be resolved statically.
-      case ast.Call(
-        func=ast.Name(id="defined", ctx=ast.Load()),
-        args=[arg],
-        keywords=[],
-      ):
-        if self._is_definitely_undef(arg):
-          return ast.Constant(value=False)
-        val = self._eval_defined(arg)
-        if val is not None:
-          return ast.Constant(value=val)
-        return node
-      
-      case ast.Call(
-        func=ast.BinOp(left=lhs, op=ast.Mod(), right=rhs)
-      ):
-        node.func = lhs
-        return ast.BinOp(left=node, op=ast.Mod(), right=rhs)
-        
     return node
 
 
@@ -264,8 +297,8 @@ class RemoveDuplicateGuards(SimplifyPass):
 
   TESTS = [
     ("(A % G) % G", "A % G"),
-    ("A % (G1 % G2)", "(A % G1) % G2"),
-    ("(A % G1) % (G2 % G1)", "(A % G1) % G2"),
+    ("A % (G1 % G2)", "A % G1 % G2"),
+    ("(A % G1) % (G2 % G1)", "A % G1 % G2"),
   ]
 
   def _collect_chain(self, node: ast.AST) -> tuple[ast.AST, list[ast.AST]]:
