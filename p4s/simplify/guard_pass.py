@@ -16,6 +16,8 @@ Rules
 * ``φ and (ψ % G)``         →  ``(φ and ψ) % G`` (conservative, conjunction only)
 * ``(fn % G)(arg)`` →  ``(fn)(arg) % G``
 * ``f(..., (a % G), ...)`` → ``f(..., a, ...) % G``
+* Guards do not hoist across ``lambda`` boundaries; lambdas stay defined and
+  only their outputs may become undefined.
 
 This pass should run *after* macro‑expansion and beta‑reduction, and
 before any static checks of undefinedness.
@@ -30,30 +32,6 @@ from .passes import SimplifyPass   # base class provides .env (ChainMap)
 
 # sentinel name for undefined
 UNDEF_NAME = str(UNDEF)
-
-
-def _free_vars(node: ast.AST, bound: set[str] | None = None) -> set[str]:
-  """Collect free variable names in *node* (Load context only)."""
-  if bound is None:
-    bound = set()
-
-  match node:
-    case ast.Name(id=name, ctx=ast.Load()):
-      return set() if name in bound else {name}
-    case ast.Lambda(args=args, body=body):
-      inner_bound = set(bound)
-      inner_bound.update(a.arg for a in args.args)
-      inner_bound.update(a.arg for a in args.kwonlyargs)
-      if args.vararg is not None:
-        inner_bound.add(args.vararg.arg)
-      if args.kwarg is not None:
-        inner_bound.add(args.kwarg.arg)
-      return _free_vars(body, inner_bound)
-    case _:
-      out: set[str] = set()
-      for child in ast.iter_child_nodes(node):
-        out.update(_free_vars(child, bound))
-      return out
 
 # ---------------------------------------------------------------------------
 # GuardFolder pass
@@ -78,15 +56,15 @@ class GuardFolder(SimplifyPass):
     ("G and (phi % G)", "(G and phi) % G"),
     (
       "lambda x: p(x) % g % defined(p(x))",
-      "(lambda x: p(x) % defined(p(x))) % g",
+      "lambda x: p(x) % g % defined(p(x))",
     ),
     ("f(x % g)", "f(x) % g"),
     (
       "KILLED(x, iota(z) % singular(z))",
       "KILLED(x, iota(z)) % singular(z)",
     ),
-    ("lambda x: p(x) % g", "(lambda x: p(x)) % g"),
-    ("iota(lambda x: p(x) % g)", "iota(lambda x: p(x)) % g"),
+    ("lambda x: p(x) % g", "lambda x: p(x) % g"),
+    ("iota(lambda x: p(x) % g)", "iota(lambda x: p(x) % g)"),
   ]
 
   TEST_ENV = {
@@ -272,34 +250,7 @@ class GuardFolder(SimplifyPass):
 
   def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
     self.generic_visit(node)
-
-    payload, guards = self._collect_guard_chain(node.body)
-    if not guards:
-      return node
-
-    bound = {a.arg for a in node.args.args}
-    bound.update(a.arg for a in node.args.kwonlyargs)
-    if node.args.vararg is not None:
-      bound.add(node.args.vararg.arg)
-    if node.args.kwarg is not None:
-      bound.add(node.args.kwarg.arg)
-
-    local_guards: list[ast.AST] = []
-    hoisted_guards: list[ast.AST] = []
-    for guard in guards:
-      if _free_vars(guard) & bound:
-        local_guards.append(guard)
-      else:
-        hoisted_guards.append(guard)
-
-    if not hoisted_guards:
-      return node
-
-    inner_body = self._rebuild_guard_chain(payload, local_guards)
-    out: ast.AST = ast.Lambda(args=node.args, body=inner_body)
-    for guard in hoisted_guards:
-      out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
-    return out
+    return node
 
   # ---------- call rewrites and defined(...) folding ---------------
   def visit_Call(self, node: ast.Call) -> ast.AST:
