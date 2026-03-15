@@ -5,6 +5,7 @@ natural language semantics in the style of Heim & Kratzer (1998)."""
 # pylint: disable=invalid-name
 
 from string import ascii_uppercase
+import ast
 from IPython import get_ipython
 
 from .semantics.interpret import Interpreter, defined, rule
@@ -25,15 +26,28 @@ DOMAIN = [PhiValue(repr(c), stype=Type.e) for c in ascii_uppercase]
 
 class Predicate(set):
   """A set of tuples representing a predicate."""
+  @staticmethod
+  def _canon_individual(item):
+    # Treat symbolic individuals like B as equivalent to string individuals 'B'.
+    if isinstance(item, PhiValue) and isinstance(item.expr, ast.Name):
+      return PhiValue(repr(item.expr.id), stype=item.stype)
+    return item
+
+  @classmethod
+  def _canon_tuple(cls, item):
+    if not isinstance(item, tuple):
+      item = (item,)
+    return tuple(cls._canon_individual(x) for x in item)
+
   def __contains__(self, item):
     # Use == (which honours PhiValue.__eq__) instead of hash-based set lookup,
     # so that e.g. the string 'B' and PhiValue('B') are treated as the same individual.
     # Also normalise bare individuals to 1-tuples so `'B' in BLACK` works like `('B',) in BLACK`.
-    if not isinstance(item, tuple):
-      item = (item,)
-    return any(item == tup for tup in set.__iter__(self))
+    item = self._canon_tuple(item)
+    return any(item == self._canon_tuple(tup) for tup in set.__iter__(self))
 
   def __call__(self, *args):
+    args = self._canon_tuple(args)
     if any(a is None for a in args):
       return None
     if any(a not in DOMAIN for a in args):
