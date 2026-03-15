@@ -73,7 +73,27 @@ def singular(f, domain = None):
         pass
       case _:
         return False
-  return sum(f(x) for x in domain) == 1
+
+  def safe_apply(x):
+    try:
+      return f(x)
+    except (NameError, TypeError, AttributeError):
+      return UNDEF
+
+  def to_truth(y):
+    if isinstance(y, PhiValue):
+      try:
+        y = y.eval()
+      except (NameError, TypeError, AttributeError, ValueError):
+        return 0
+    if y in (None, UNDEF):
+      return 0
+    try:
+      return int(bool(y))
+    except (TypeError, ValueError):
+      return 0
+
+  return sum(to_truth(safe_apply(x)) for x in domain) == 1
 
 def empty(f, domain = None):
   if domain is None:
