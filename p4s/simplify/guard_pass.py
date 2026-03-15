@@ -76,6 +76,10 @@ class GuardFolder(SimplifyPass):
     ("(phi % G) and psi", "(phi and psi) % G"),
     ("(phi % G1) and (psi % G2)", "(phi and psi) % G1 % G2"),
     ("G and (phi % G)", "(G and phi) % G"),
+    (
+      "lambda x: p(x) % g % defined(p(x))",
+      "(lambda x: p(x) % defined(p(x))) % g",
+    ),
     ("f(x % g)", "f(x) % g"),
     (
       "KILLED(x, iota(z) % singular(z))",
@@ -155,6 +159,25 @@ class GuardFolder(SimplifyPass):
       case _:
         return None
 
+  @staticmethod
+  def _collect_guard_chain(node: ast.AST) -> tuple[ast.AST, list[ast.AST]]:
+    """Return (payload, guards) where guards are in application order."""
+    if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Mod):
+      return node, []
+
+    payload, guards = GuardFolder._collect_guard_chain(node.left)
+    rhs_payload, rhs_guards = GuardFolder._collect_guard_chain(node.right)
+    guards.append(rhs_payload)
+    guards.extend(rhs_guards)
+    return payload, guards
+
+  @staticmethod
+  def _rebuild_guard_chain(payload: ast.AST, guards: list[ast.AST]) -> ast.AST:
+    out = payload
+    for guard in guards:
+      out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
+    return out
+
   # ---------- φ % ψ  ------------------------------------------------
   def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
     self.generic_visit(node)
@@ -227,24 +250,33 @@ class GuardFolder(SimplifyPass):
   def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
     self.generic_visit(node)
 
-    match node.body:
-      case ast.BinOp(left=lhs, op=ast.Mod(), right=rhs):
-        bound = {a.arg for a in node.args.args}
-        bound.update(a.arg for a in node.args.kwonlyargs)
-        if node.args.vararg is not None:
-          bound.add(node.args.vararg.arg)
-        if node.args.kwarg is not None:
-          bound.add(node.args.kwarg.arg)
+    payload, guards = self._collect_guard_chain(node.body)
+    if not guards:
+      return node
 
-        # Only hoist if the guard does not depend on lambda-bound vars.
-        if not (_free_vars(rhs) & bound):
-          return ast.BinOp(
-            left=ast.Lambda(args=node.args, body=lhs),
-            op=ast.Mod(),
-            right=rhs,
-          )
+    bound = {a.arg for a in node.args.args}
+    bound.update(a.arg for a in node.args.kwonlyargs)
+    if node.args.vararg is not None:
+      bound.add(node.args.vararg.arg)
+    if node.args.kwarg is not None:
+      bound.add(node.args.kwarg.arg)
 
-    return node
+    local_guards: list[ast.AST] = []
+    hoisted_guards: list[ast.AST] = []
+    for guard in guards:
+      if _free_vars(guard) & bound:
+        local_guards.append(guard)
+      else:
+        hoisted_guards.append(guard)
+
+    if not hoisted_guards:
+      return node
+
+    inner_body = self._rebuild_guard_chain(payload, local_guards)
+    out: ast.AST = ast.Lambda(args=node.args, body=inner_body)
+    for guard in hoisted_guards:
+      out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
+    return out
 
   # ---------- call rewrites and defined(...) folding ---------------
   def visit_Call(self, node: ast.Call) -> ast.AST:
