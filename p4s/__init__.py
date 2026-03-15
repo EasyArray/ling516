@@ -74,26 +74,59 @@ def singular(f, domain = None):
       case _:
         return False
 
-  def safe_apply(x):
+  def truth_at(x):
     try:
-      return f(x)
-    except (NameError, TypeError, AttributeError):
-      return UNDEF
+      y = f(x)
+    except NameError as exc:
+      raise NameError(
+        f"singular() undefined name while applying predicate to {x!r}: {exc}"
+      ) from exc
+    except AttributeError as exc:
+      raise AttributeError(
+        f"singular() attribute error while applying predicate to {x!r}: {exc}"
+      ) from exc
+    except TypeError as exc:
+      raise TypeError(
+        f"singular() type error while applying predicate to {x!r}: {exc}"
+      ) from exc
 
-  def to_truth(y):
     if isinstance(y, PhiValue):
       try:
         y = y.eval()
-      except (NameError, TypeError, AttributeError, ValueError):
-        return 0
+      except NameError as exc:
+        raise NameError(
+          f"singular() undefined name while evaluating predicate result for {x!r}: {exc}"
+        ) from exc
+      except AttributeError as exc:
+        raise AttributeError(
+          f"singular() attribute error while evaluating predicate result for {x!r}: {exc}"
+        ) from exc
+      except TypeError as exc:
+        raise TypeError(
+          f"singular() type error while evaluating predicate result for {x!r}: {exc}"
+        ) from exc
+      except ValueError as exc:
+        raise ValueError(
+          f"singular() value error while evaluating predicate result for {x!r}: {exc}"
+        ) from exc
+
     if y in (None, UNDEF):
       return 0
+
     try:
       return int(bool(y))
-    except (TypeError, ValueError):
-      return 0
+    except TypeError as exc:
+      raise TypeError(
+        "singular() predicate result is not truth-evaluable "
+        f"for {x!r}: {y!r} ({type(y).__name__})"
+      ) from exc
+    except ValueError as exc:
+      raise ValueError(
+        "singular() predicate result has invalid truth value "
+        f"for {x!r}: {y!r} ({type(y).__name__})"
+      ) from exc
 
-  return sum(to_truth(safe_apply(x)) for x in domain) == 1
+  return sum(truth_at(x) for x in domain) == 1
 
 def empty(f, domain = None):
   if domain is None:

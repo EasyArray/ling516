@@ -27,6 +27,7 @@ Logging (``logging.DEBUG``)
 * arity mismatches or exceptions inside rule trials
 """
 
+import ast
 import logging
 from functools import wraps
 from inspect import Parameter, signature
@@ -59,6 +60,12 @@ def rule(fn: Callable | None = None, *, index: int | None = None):
 def defined(value: PhiValue) -> bool:
   """Check if a PhiValue is defined (not UNDEF)."""
   if isinstance(value, PhiValue):
+    # Guarded denotations should continue compositionally so their
+    # presupposition can project, rather than being collapsed to UNDEF
+    # during rule applicability checks.
+    if any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.Mod)
+           for n in ast.walk(value.expr)):
+      return True
     try:
       return value.eval() is not UNDEF
     except:

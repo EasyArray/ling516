@@ -93,16 +93,39 @@ class GuardFolder(SimplifyPass):
     'UNDEF': ast.Name(id=UNDEF_NAME, ctx=ast.Load()),
   }
 
-  # ---------- helper: try static eval of RHS -----------------------
+  # ---------- helper: literal boolean folding only ------------------
   def _eval_bool(self, expr: ast.AST):
-    try:
-      code = compile(ast.Expression(expr), filename="<ast>", mode="eval")
-      val = eval(code, self.env)
-      if isinstance(val, bool):
-        return val
-    except Exception:
-      pass
-    return None
+    """
+    Return a boolean value only when *expr* is syntactically boolean-literal.
+
+    We intentionally avoid runtime ``eval`` here: guard expressions like
+    ``singular(...)`` should remain as guards after beta reduction rather than
+    being collapsed to UNDEF during simplification.
+    """
+    match expr:
+      case ast.Constant(value=value) if isinstance(value, bool):
+        return value
+      case ast.UnaryOp(op=ast.Not(), operand=operand):
+        val = self._eval_bool(operand)
+        return (not val) if val is not None else None
+      case ast.BoolOp(op=ast.And(), values=values):
+        folded: list[bool] = []
+        for value in values:
+          val = self._eval_bool(value)
+          if val is None:
+            return None
+          folded.append(val)
+        return all(folded)
+      case ast.BoolOp(op=ast.Or(), values=values):
+        folded: list[bool] = []
+        for value in values:
+          val = self._eval_bool(value)
+          if val is None:
+            return None
+          folded.append(val)
+        return any(folded)
+      case _:
+        return None
 
   def _is_assumed_defined_name(self, name: str) -> bool | None:
     """Return static definedness for bare names under the lexical assumptions."""
