@@ -61,6 +61,39 @@ def _label_to_html(label: str) -> str:
     label = html.escape(label)
   return f"<span>{label}</span>"
 
+
+def _collapsed_result_preview(sem: object, *, max_chars: int = 72) -> str | None:
+  """Return a short display string for a definite collapsed value, or None."""
+  if not isinstance(sem, PhiValue):
+    return None
+
+  try:
+    collapsed = sem.eval()
+    seen: set[int] = set()
+    while isinstance(collapsed, PhiValue):
+      ident = id(collapsed)
+      if ident in seen:
+        return None
+      seen.add(ident)
+      nxt = collapsed.eval()
+      if nxt is collapsed:
+        return None
+      collapsed = nxt
+  except Exception:
+    return None
+
+  if isinstance(collapsed, PhiValue):
+    return None
+
+  collapsed_text = repr(collapsed)
+  symbolic_text = ast.unparse(sem.expr)
+  if collapsed_text == symbolic_text:
+    return None
+
+  if len(collapsed_text) > max_chars:
+    return collapsed_text[: max_chars - 3] + "..."
+  return collapsed_text
+
 def split_with_sem(node):
   """
   Tree split function that embeds a syntactic label with an inline badge
@@ -94,6 +127,17 @@ def split_with_sem(node):
   )
   first_line = f"<span>{label} {badge_html} {rule_badge}</span>"
 
+  collapsed_preview = _collapsed_result_preview(sem)
+  result_line = (
+    "<div style='font-size:10px;line-height:1.15;opacity:.85;"
+    "border-top:1px solid rgba(128,128,128,.25);display:inline-flex;"
+    "justify-content:center;align-items:center;"
+    "justify-self:center;margin-top:2px;padding-top:2px;text-align:center;'>"
+    f"<strong>Result:</strong> {html.escape(collapsed_preview)}"
+    "</div>"
+    if collapsed_preview is not None else ''
+  )
+
   # 3) Pretty-print code with Black at a narrower line length for trees
   expr = getattr(sem, 'expr', None)
   if expr:
@@ -112,6 +156,7 @@ def split_with_sem(node):
     f"{width_css}'>"
     f'{_CSS}'
     f"{first_line}"
+    f"{result_line}"
     f"<div style='text-align:left;'>{code_html}</div></div>"
   )
 
