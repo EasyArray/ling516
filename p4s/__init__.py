@@ -52,8 +52,13 @@ def charset(f, domain = None):
 def singular(f, domain = None):
   if domain is None:
     domain = DOMAIN
-  if hasattr(f, 'stype') and f.stype != Type.et:
-    return False
+  stype = getattr(f, 'stype', None)
+  if stype is not None:
+    match stype:
+      case (domain_t, Type.t) if domain_t == Type.e or getattr(domain_t, 'is_unknown', False):
+        pass
+      case _:
+        return False
   return sum(f(x) for x in domain) == 1
 
 def empty(f, domain = None):
