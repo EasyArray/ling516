@@ -67,6 +67,11 @@ def _collapsed_result_preview(sem: object, *, max_chars: int = 72) -> str | None
   if not isinstance(sem, PhiValue):
     return None
 
+  def _truncate(text: str) -> str:
+    if len(text) > max_chars:
+      return text[: max_chars - 3] + "..."
+    return text
+
   try:
     collapsed = sem.eval()
     seen: set[int] = set()
@@ -85,14 +90,18 @@ def _collapsed_result_preview(sem: object, *, max_chars: int = 72) -> str | None
   if isinstance(collapsed, PhiValue):
     return None
 
-  collapsed_text = repr(collapsed)
   symbolic_text = ast.unparse(sem.expr)
+
+  if callable(collapsed):
+    collapsed_text = repr(collapsed)
+    if collapsed_text == symbolic_text:
+      return None
+    return _truncate(collapsed_text)
+
+  collapsed_text = repr(collapsed)
   if collapsed_text == symbolic_text:
     return None
-
-  if len(collapsed_text) > max_chars:
-    return collapsed_text[: max_chars - 3] + "..."
-  return collapsed_text
+  return _truncate(collapsed_text)
 
 def split_with_sem(node):
   """

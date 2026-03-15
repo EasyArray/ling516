@@ -19,6 +19,82 @@ from p4s.core.infer         import infer_and_strip   # type checker / DSL stripp
 from p4s.core.stypes        import Type              # semantic type system
 from p4s.core.constants     import UNDEF             # sentinel for undefined values
 
+
+class _EvaluatedLambda:
+  """Callable wrapper with a stable semantic repr for evaluated lambdas."""
+
+  __slots__ = ("_fn", "_preview")
+
+  def __init__(self, fn, preview: str):
+    self._fn = fn
+    self._preview = preview
+
+  def __call__(self, *args, **kwargs):
+    return self._fn(*args, **kwargs)
+
+  def __repr__(self):
+    return self._preview
+
+  def __str__(self):
+    return self._preview
+
+
+def _lambda_param_names(expr: ast.Lambda) -> set[str]:
+  names = {
+    a.arg for a in (
+      list(expr.args.posonlyargs)
+      + list(expr.args.args)
+      + list(expr.args.kwonlyargs)
+    )
+  }
+  if expr.args.vararg is not None:
+    names.add(expr.args.vararg.arg)
+  if expr.args.kwarg is not None:
+    names.add(expr.args.kwarg.arg)
+  return names
+
+
+def _lambda_has_global_false_guard(expr: ast.Lambda, env: dict[str, object]) -> bool:
+  """True when a lambda body has a `% guard` independent of params that is false."""
+  params = _lambda_param_names(expr)
+
+  node = expr.body
+  guards: list[ast.AST] = []
+  while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+    guards.append(node.right)
+    node = node.left
+
+  for guard in guards:
+    guard_uses_param = any(
+      isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in params
+      for n in ast.walk(guard)
+    )
+    if guard_uses_param:
+      continue
+    try:
+      value = eval(compile(ast.Expression(guard), "<guard>", "eval"), env)
+    except Exception:
+      continue
+    if not bool(value):
+      return True
+
+  return False
+
+
+def _lambda_preview(expr: ast.Lambda, env: dict[str, object]) -> str:
+  """Compact textual form for evaluated lambda callables."""
+  if _lambda_has_global_false_guard(expr, env):
+    return "lambda: UNDEF"
+
+  params = _lambda_param_names(expr)
+  uses_param = any(
+    isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in params
+    for n in ast.walk(expr.body)
+  )
+  if uses_param:
+    return ast.unparse(expr)
+  return f"lambda: {ast.unparse(expr.body)}"
+
 # ---------------------------------------------------------------------------
 #  PhiValue
 # ---------------------------------------------------------------------------
@@ -159,6 +235,8 @@ class PhiValue:
       return UNDEF
     if self.stype == Type.t:
       out = int(bool(out))
+    if callable(out) and isinstance(self.expr, ast.Lambda):
+      return _EvaluatedLambda(out, _lambda_preview(self.expr, env_dict))
     return out
 
   # ---------------------------------------------------------------------
