@@ -54,6 +54,70 @@ def _lambda_param_names(expr: ast.Lambda) -> set[str]:
   return names
 
 
+def _lambda_header(expr: ast.Lambda) -> str:
+  preview_lambda = ast.Lambda(args=copy.deepcopy(expr.args), body=ast.Constant(value=None))
+  return ast.unparse(preview_lambda).rsplit(":", 1)[0]
+
+
+class _GuardModToIfExp(ast.NodeTransformer):
+  def visit_BinOp(self, node: ast.BinOp):
+    left_was_guard = isinstance(node.left, ast.BinOp) and isinstance(node.left.op, ast.Mod)
+    node = self.generic_visit(node)
+    if isinstance(node.op, ast.Mod):
+      if not left_was_guard:
+        return ast.IfExp(
+          test=node.right,
+          body=node.left,
+          orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+        )
+
+      lhs_name = "__guard_lhs"
+      lhs_ref = ast.Name(id=lhs_name, ctx=ast.Load())
+      undef_ref = ast.Name(id=str(UNDEF), ctx=ast.Load())
+      return ast.Call(
+        func=ast.Lambda(
+          args=ast.arguments(
+            posonlyargs=[],
+            args=[ast.arg(arg=lhs_name)],
+            kwonlyargs=[],
+            kw_defaults=[],
+            defaults=[],
+            vararg=None,
+            kwarg=None,
+          ),
+          body=ast.IfExp(
+            test=ast.Compare(
+              left=lhs_ref,
+              ops=[ast.Is()],
+              comparators=[undef_ref],
+            ),
+            body=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+            orelse=ast.IfExp(
+              test=node.right,
+              body=lhs_ref,
+              orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
+            ),
+          ),
+        ),
+        args=[node.left],
+        keywords=[],
+      )
+    return node
+
+
+def _eval_ast_with_guards(expr: ast.AST, env: dict[str, object]) -> Any:
+  # Keep runtime guard semantics here. simplify/guard_pass.py handles
+  # static normalization, while lambda preview reuses this evaluator so
+  # display stays aligned with actual PhiValue execution.
+  expr = copy.deepcopy(expr)
+  if any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.Mod)
+         for n in ast.walk(expr)):
+    expr = _GuardModToIfExp().visit(expr)
+    ast.fix_missing_locations(expr)
+  code = compile(ast.Expression(expr), filename="<phivalue>", mode="eval")
+  return eval(code, env)
+
+
 def _lambda_has_global_false_guard(expr: ast.Lambda, env: dict[str, object]) -> bool:
   """True when a lambda body has a `% guard` independent of params that is false."""
   params = _lambda_param_names(expr)
@@ -72,7 +136,7 @@ def _lambda_has_global_false_guard(expr: ast.Lambda, env: dict[str, object]) -> 
     if guard_uses_param:
       continue
     try:
-      value = eval(compile(ast.Expression(guard), "<guard>", "eval"), env)
+      value = _eval_ast_with_guards(guard, env)
     except Exception:
       continue
     if not bool(value):
@@ -83,8 +147,9 @@ def _lambda_has_global_false_guard(expr: ast.Lambda, env: dict[str, object]) -> 
 
 def _lambda_preview(expr: ast.Lambda, env: dict[str, object]) -> str:
   """Compact textual form for evaluated lambda callables."""
+  header = _lambda_header(expr)
   if _lambda_has_global_false_guard(expr, env):
-    return "lambda: UNDEF"
+    return f"{header}: UNDEF"
 
   params = _lambda_param_names(expr)
   uses_param = any(
@@ -93,7 +158,16 @@ def _lambda_preview(expr: ast.Lambda, env: dict[str, object]) -> str:
   )
   if uses_param:
     return ast.unparse(expr)
-  return f"lambda: {ast.unparse(expr.body)}"
+  try:
+    value = _eval_ast_with_guards(expr.body, env)
+  except Exception:
+    return f"{header}: {ast.unparse(expr.body)}"
+
+  if value is UNDEF:
+    rendered = "UNDEF"
+  else:
+    rendered = repr(value)
+  return f"{header}: {rendered}"
 
 # ---------------------------------------------------------------------------
 #  PhiValue
@@ -175,62 +249,9 @@ class PhiValue:
 
   def eval(self) -> Any:
     """Evaluate the stored expression in its captured environment."""
-    class _GuardModToIfExp(ast.NodeTransformer):
-      def visit_BinOp(self, node: ast.BinOp):
-        left_was_guard = isinstance(node.left, ast.BinOp) and isinstance(node.left.op, ast.Mod)
-        node = self.generic_visit(node)
-        if isinstance(node.op, ast.Mod):
-          if not left_was_guard:
-            return ast.IfExp(
-              test=node.right,
-              body=node.left,
-              orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
-            )
-
-          lhs_name = "__guard_lhs"
-          lhs_ref = ast.Name(id=lhs_name, ctx=ast.Load())
-          undef_ref = ast.Name(id=str(UNDEF), ctx=ast.Load())
-          return ast.Call(
-            func=ast.Lambda(
-              args=ast.arguments(
-                posonlyargs=[],
-                args=[ast.arg(arg=lhs_name)],
-                kwonlyargs=[],
-                kw_defaults=[],
-                defaults=[],
-                vararg=None,
-                kwarg=None,
-              ),
-              body=ast.IfExp(
-                test=ast.Compare(
-                  left=lhs_ref,
-                  ops=[ast.Is()],
-                  comparators=[undef_ref],
-                ),
-                body=ast.Name(id=str(UNDEF), ctx=ast.Load()),
-                orelse=ast.IfExp(
-                  test=node.right,
-                  body=lhs_ref,
-                  orelse=ast.Name(id=str(UNDEF), ctx=ast.Load()),
-                ),
-              ),
-            ),
-            args=[node.left],
-            keywords=[],
-          )
-        return node
-
     # Python's eval requires a real dict for globals
     env_dict = dict(self._env)
-    expr = self.expr
-    if any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.Mod)
-           for n in ast.walk(self.expr)):
-      expr = copy.deepcopy(self.expr)
-      expr = _GuardModToIfExp().visit(expr)
-      ast.fix_missing_locations(expr)
-
-    code = compile(ast.Expression(expr), filename="<phivalue>", mode="eval")
-    out = eval(code, env_dict)
+    out = _eval_ast_with_guards(self.expr, env_dict)
     if out is UNDEF:
       return UNDEF
     if self.stype == Type.t:
