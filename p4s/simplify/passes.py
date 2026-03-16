@@ -69,28 +69,47 @@ class DictMergeFolder(SimplifyPass):
   TESTS = [
     ("{'a':1} | {'b':2}", "{'a': 1, 'b': 2}"),
     ("{'x':1} | {'x':2}", "{'x': 2}"),
+    ("(g | {2:x}) | {1:x_1}", "g | {2: x, 1: x_1}"),
+    ("(g | {2:x}) | {2:x_1}", "g | {2: x_1}"),
   ]
+
+  @staticmethod
+  def _merge_dict_nodes(left: Dict, right: Dict) -> Dict:
+    keys = left.keys + right.keys
+    values = left.values + right.values
+
+    merged: dict[str, tuple[AST, AST]] = {
+      ast.unparse(k): (k, v)
+      for k, v in zip(keys, values)
+    }
+
+    if not merged:
+      return Dict(keys=[], values=[])
+
+    new_keys, new_values = zip(*merged.values())
+    return Dict(keys=list(new_keys), values=list(new_values))
+
   def visit_BinOp(self, node: BinOp):
     self.generic_visit(node)
     match(node):
       case BinOp(op=BitOr(), 
                  left=Dict(keys=keys1, values=values1), 
                  right=Dict(keys=keys2, values=values2)):
-        # merge two dicts
-        keys   = keys1 + keys2
-        values = values1 + values2
+        return self._merge_dict_nodes(
+          Dict(keys=keys1, values=values1),
+          Dict(keys=keys2, values=values2),
+        )
 
-        # use the source‐string of each key as the merge‐dict key
-        merged: dict[str, tuple[AST, AST]] = {
-          ast.unparse(k): (k, v)
-          for k, v in zip(keys, values)
-        }
-
-        # rebuild our Dict node from the final (k,v) pairs
-        if not merged:
-          return node
-        new_keys, new_values = zip(*merged.values())
-        return Dict(keys=list(new_keys), values=list(new_values))
+      case BinOp(
+        op=BitOr(),
+        left=BinOp(left=lhs, op=BitOr(), right=Dict(keys=keys1, values=values1)),
+        right=Dict(keys=keys2, values=values2),
+      ):
+        merged = self._merge_dict_nodes(
+          Dict(keys=keys1, values=values1),
+          Dict(keys=keys2, values=values2),
+        )
+        return BinOp(left=lhs, op=BitOr(), right=merged)
 
     return node
 
@@ -106,9 +125,13 @@ class DictLookupFolder(SimplifyPass):
     ("{'a':1}['a']", "1"),
     ("{i:1}[i]", "1"),
     ("(d | {1:x})[1]", "x"),
+    ("(g | {2:x} | {1:x_1})[2]", "x"),
+    ("(g | {2:x} | {2:x_1})[2]", "x_1"),
   ]
+
   def visit_Subscript(self, node: Subscript):
     self.generic_visit(node)
+
     match node:
       # {'a':1}['a'] → 1 (constant key)
       case Subscript(value=Dict(keys=keys, values=values), slice=Constant(value=key)):
