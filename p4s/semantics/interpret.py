@@ -57,8 +57,8 @@ def rule(fn: Callable | None = None, *, index: int | None = None):
 # Helpers
 # ——————————————————————————————————————————————
 
-def defined(value: PhiValue) -> bool:
-  """Check if a PhiValue is defined (not UNDEF)."""
+def defined(value: Any) -> bool:
+  """Check if a value is defined (not UNDEF/None)."""
   if isinstance(value, PhiValue):
     # Guarded denotations should continue compositionally so their
     # presupposition can project, rather than being collapsed to UNDEF
@@ -70,7 +70,7 @@ def defined(value: PhiValue) -> bool:
       return value.eval() is not UNDEF
     except:
       return True
-  return False
+  return value is not None and value is not UNDEF
 
 # ——————————————————————————————————————————————
 # Interpreter
