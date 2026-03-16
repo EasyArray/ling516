@@ -305,10 +305,37 @@ class PhiValue:
   #  functional behaviour
   # ---------------------------------------------------------------------
 
+  def _clone(self, *, expr: ast.AST | None = None, env_overrides: Optional[dict[str, Any]] = None):
+    clone = object.__new__(PhiValue)
+    clone.expr = copy.deepcopy(self.expr if expr is None else expr)
+    clone.stype = self.stype
+    clone.guard = copy.deepcopy(self.guard)
+    clone._env = self._env if not env_overrides else self._env.new_child(dict(env_overrides))
+    return clone
+
   def __call__(self, *args: "PhiValue", **kwargs) -> Any:
+    lambda_kwargs = _lambda_param_names(self.expr) if isinstance(self.expr, ast.Lambda) else set()
+    if not args and kwargs and not set(kwargs).issubset(lambda_kwargs):
+      phi = self._clone(env_overrides=kwargs)
+      try:
+        result = phi.eval()
+        if callable(result) and not isinstance(result, PhiValue):
+          return phi
+        return result
+      except Exception:
+        return phi
+
     # Convert basic types to PhiValues
     args = tuple(PhiValue(a) if not isinstance(a, PhiValue) else a for a in args)
-    kwargs = {k: PhiValue(v) if not isinstance(v, PhiValue) else v for k, v in kwargs.items()}
+    call_kwargs = {}
+    env_overrides = {}
+    for key, value in kwargs.items():
+      if isinstance(value, PhiValue):
+        call_kwargs[key] = value
+      elif isinstance(value, (ast.AST, int, float, bool, str)):
+        call_kwargs[key] = PhiValue(value)
+      else:
+        env_overrides[key] = value
     
     # Attach type info BEFORE deepcopy so it gets copied
     if self.stype is not None:
@@ -316,13 +343,18 @@ class PhiValue:
     for a in args:
       if a.stype is not None:
         a.expr.stype = a.stype
+    for kwarg in call_kwargs.values():
+      if kwarg.stype is not None:
+        kwarg.expr.stype = kwarg.stype
     
     call_ast = ast.Call(
       func=copy.deepcopy(self.expr),
       args=[copy.deepcopy(a.expr) for a in args],
-      keywords=[ast.keyword(arg=k, value=copy.deepcopy(kwargs[k].expr)) for k in kwargs]
+      keywords=[ast.keyword(arg=k, value=copy.deepcopy(call_kwargs[k].expr)) for k in call_kwargs]
     )
     phi = PhiValue(call_ast)
+    if env_overrides:
+      phi._env = self._env.new_child(env_overrides)
     try:
       result = phi.eval()
       # Keep Python callables (e.g., lambda/function objects) as unevaluated
