@@ -54,9 +54,102 @@ def _lambda_param_names(expr: ast.Lambda) -> set[str]:
   return names
 
 
+def _node_uses_params(node: ast.AST, params: set[str]) -> bool:
+  return any(
+    isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in params
+    for n in ast.walk(node)
+  )
+
+
 def _lambda_header(expr: ast.Lambda) -> str:
   preview_lambda = ast.Lambda(args=copy.deepcopy(expr.args), body=ast.Constant(value=None))
   return ast.unparse(preview_lambda).rsplit(":", 1)[0]
+
+
+def _literal_ast_for_value(value: Any) -> ast.AST | None:
+  if value is UNDEF:
+    return ast.Name(id=str(UNDEF), ctx=ast.Load())
+  if isinstance(value, (type(None), bool, int, float, str)):
+    return ast.Constant(value=value)
+  return None
+
+
+def _collect_guard_chain(node: ast.AST) -> tuple[ast.AST, list[ast.AST]]:
+  guards: list[ast.AST] = []
+  while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod):
+    guards.append(node.right)
+    node = node.left
+  return node, guards
+
+
+def _rebuild_guard_chain(payload: ast.AST, guards: list[ast.AST]) -> ast.AST:
+  out = payload
+  for guard in guards:
+    out = ast.BinOp(left=out, op=ast.Mod(), right=guard)
+  return out
+
+
+def _truth_literal_value(node: ast.AST) -> int | None:
+  if isinstance(node, ast.Constant) and node.value in (0, 1, False, True):
+    return int(bool(node.value))
+  return None
+
+
+def _simplify_preview_boolop(node: ast.BoolOp) -> ast.AST:
+  values = list(node.values)
+  if isinstance(node.op, ast.And):
+    if any(_truth_literal_value(value) == 0 for value in values):
+      return ast.Constant(value=0)
+    values = [value for value in values if _truth_literal_value(value) != 1]
+    if not values:
+      return ast.Constant(value=1)
+    if len(values) == 1:
+      return values[0]
+    node.values = values
+    return node
+
+  if isinstance(node.op, ast.Or):
+    if any(_truth_literal_value(value) == 1 for value in values):
+      return ast.Constant(value=1)
+    values = [value for value in values if _truth_literal_value(value) != 0]
+    if not values:
+      return ast.Constant(value=0)
+    if len(values) == 1:
+      return values[0]
+    node.values = values
+    return node
+
+  return node
+
+
+class _PreviewClosedFolder(ast.NodeTransformer):
+  def __init__(self, params: set[str], env: dict[str, object]):
+    self.params = params
+    self.env = env
+
+  def visit_Lambda(self, node: ast.Lambda):
+    return node
+
+  def generic_visit(self, node: ast.AST):
+    node = super().generic_visit(node)
+    if isinstance(node, ast.BoolOp):
+      node = _simplify_preview_boolop(node)
+    if _node_uses_params(node, self.params):
+      return node
+    try:
+      value = _eval_ast_with_guards(node, self.env)
+    except Exception:
+      return node
+    literal = _literal_ast_for_value(value)
+    return literal or node
+
+
+def _preview_lambda_expr(expr: ast.Lambda, env: dict[str, object]) -> ast.AST:
+  params = _lambda_param_names(expr)
+  payload, guards = _collect_guard_chain(copy.deepcopy(expr.body))
+  payload = _PreviewClosedFolder(params, env).visit(payload)
+  rebuilt = _rebuild_guard_chain(payload, guards)
+  return ast.Lambda(args=copy.deepcopy(expr.args), body=rebuilt)
 
 
 class _GuardModToIfExp(ast.NodeTransformer):
@@ -152,12 +245,9 @@ def _lambda_preview(expr: ast.Lambda, env: dict[str, object]) -> str:
     return f"{header}: UNDEF"
 
   params = _lambda_param_names(expr)
-  uses_param = any(
-    isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id in params
-    for n in ast.walk(expr.body)
-  )
+  uses_param = _node_uses_params(expr.body, params)
   if uses_param:
-    return ast.unparse(expr)
+    return ast.unparse(_preview_lambda_expr(expr, env))
   try:
     value = _eval_ast_with_guards(expr.body, env)
   except Exception:
