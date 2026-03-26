@@ -74,8 +74,15 @@ LAMBDA_SEQ = [
 
 def backtick_token_transform(tokens: Iterable[tokenize.TokenInfo]):
   """Replace every back‑tick token with the tuple sequence for `lambda φ:`."""
+  skip_token_types = {
+    tokenize.STRING,
+    getattr(tokenize, "FSTRING_MIDDLE", None),
+    getattr(tokenize, "TSTRING_MIDDLE", None),
+  }
+  skip_token_types.discard(None)
+
   for tok in tokens:
-    if tok.string == BACKTICK:
+    if tok.type not in skip_token_types and tok.string == BACKTICK:
       for part in LAMBDA_SEQ:
         yield part
     else:
