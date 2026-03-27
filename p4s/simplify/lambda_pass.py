@@ -34,8 +34,27 @@ def free_vars(node: AST) -> Set[str]:
 
 def _fresh(base: str, taken: Set[str]) -> str:
   """Generate a fresh identifier not in *taken*, based on *base*."""
-  i = 0
-  candidate = base
+  if base not in taken:
+    return base
+
+  letters = "abcdefghijklmnopqrstuvwxyz"
+
+  # Prefer single-letter lowercase names, starting at base (or x) and wrapping z -> a.
+  if len(base) == 1 and base in letters:
+    start = base
+  else:
+    start = "x"
+
+  split_at = letters.index(start)
+  candidates = letters[split_at:] + letters[:split_at]
+
+  for candidate in candidates:
+    if candidate not in taken:
+      return candidate
+
+  # If all single lowercase names are taken, fall back to suffixed names.
+  i = 1
+  candidate = f"{base}_{i}"
   while candidate in taken:
     i += 1
     candidate = f"{base}_{i}"
