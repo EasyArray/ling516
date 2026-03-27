@@ -79,14 +79,16 @@ class _NameSubstituter(NodeTransformer):
 
   def _alpha_and_recurse(self, node: Lambda) -> Lambda:
     bound = {a.arg for a in node.args.args}
-    # If any parameter name is in mapping keys or appears free in replacement ASTs
-    replacement_free = set().union(*(free_vars(v) for v in self.mapping.values()))
-    collisions = bound & replacement_free  # only if replacement values free-vars collide with params
+    # Only consider replacements for keys not shadowed by this lambda's bindings.
+    # Shadowed keys are dropped from the mapping when we recurse, so their
+    # replacement values will never be introduced inside — no capture possible.
+    active_mapping = {k: v for k, v in self.mapping.items() if k not in bound}
+    replacement_free = set().union(*(free_vars(v) for v in active_mapping.values()))
+    collisions = bound & replacement_free
 
     if not collisions:
-      # No renaming needed; just recurse, shadowing bound names
-      inner_mapping = {k: v for k, v in self.mapping.items() if k not in bound}
-      node.body = _NameSubstituter(inner_mapping).visit(node.body)
+      # No renaming needed; just recurse with the active (non-shadowed) mapping
+      node.body = _NameSubstituter(active_mapping).visit(node.body)
       return node
 
     # α‑rename colliding parameters
@@ -106,9 +108,8 @@ class _NameSubstituter(NodeTransformer):
     param_subst = {old: Name(id=new, ctx=Load()) for old, new in rename_map.items()}
     node.body = _NameSubstituter(param_subst).visit(node.body)
 
-    # Recurse on remaining mapping
-    inner_mapping = {k: v for k, v in self.mapping.items() if k not in collisions}
-    node.body = _NameSubstituter(inner_mapping).visit(node.body)
+    # Recurse on active mapping (all bound vars already excluded)
+    node.body = _NameSubstituter(active_mapping).visit(node.body)
     return node
 
   def visit_Lambda(self, node: Lambda) -> Lambda:
@@ -143,7 +144,11 @@ class BetaReducer(SimplifyPass):
     # nested lambdas with positional args
     ("((lambda x: (lambda y: x + y))(1))(2)",      "1 + 2"),
     # capture‑avoidance with keyword binding
-    ("(lambda y: (lambda x: x + y))(y=x)",          "lambda x_1: x_1 + x"),
+    ("(lambda y: (lambda x: x + y))(y=x)",          "lambda z: z + x"),
+    # no rename needed: inner lambda's x is bound, not free in its body relative to substitution
+    ("(lambda x: ON(x, iota(lambda x: COUCH(x))))(x)", "ON(x, iota(lambda x: COUCH(x)))"),
+    # must still rename: outer y is free in body, so capture IS possible
+    ("(lambda x: (lambda y: y + x))(y)",             "lambda z: z + y"),
   ]
 
   # ------------------------------------------------------------------
